@@ -112,10 +112,14 @@ export const submitRegistration = createServerFn({ method: "POST" })
       sheetSyncError = "Google Sheets connection is not configured.";
     }
 
-    await supabaseAdmin
-      .from("spark_registrations")
-      .update({ sheet_synced: sheetSynced, sheet_sync_error: sheetSyncError })
-      .eq("id", registration.id);
+    try {
+      await supabaseAdmin
+        .from("spark_registrations")
+        .update({ sheet_synced: sheetSynced, sheet_sync_error: sheetSyncError })
+        .eq("id", registration.id);
+    } catch (e) {
+      console.warn("Could not update sheet sync status:", e);
+    }
 
     return { candidateId: id, sheetSynced };
   });
