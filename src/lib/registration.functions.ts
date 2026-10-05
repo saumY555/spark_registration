@@ -129,13 +129,13 @@ export const submitRegistration = createServerFn({ method: "POST" })
       .from("applications")
       .insert(insertData)
       .select("id, registration_no, created_at")
-      .single();
+      .maybeSingle();
 
-    if (error || !application) {
+    if (error) {
       handleSupabaseError(error);
     }
 
-    const regNo = application.registration_no || defaultRegNo;
+    const regNo = application?.registration_no || defaultRegNo;
     let sheetSynced = false;
     let sheetSyncError: string | null = null;
     const webhookUrl =
@@ -156,7 +156,7 @@ export const submitRegistration = createServerFn({ method: "POST" })
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           redirect: "follow",
           body: JSON.stringify({
-            created_at: application.created_at,
+            created_at: application?.created_at || new Date().toISOString(),
             registration_no: regNo,
             full_name: data.fullName,
             scholar_number: data.scholarNumber.toUpperCase(),
@@ -196,7 +196,7 @@ export const submitRegistration = createServerFn({ method: "POST" })
             body: JSON.stringify({
               majorDimension: "ROWS",
               values: [[
-                application.created_at,
+                application?.created_at || new Date().toISOString(),
                 regNo,
                 data.fullName,
                 data.email.toLowerCase(),
@@ -266,9 +266,9 @@ export const updateRegistration = createServerFn({ method: "POST" })
       .update(updatePayload)
       .eq("registration_no", data.registrationNo)
       .select("id, registration_no, created_at, updated_at")
-      .single();
+      .maybeSingle();
 
-    if (error || !updatedApp) {
+    if (error) {
       handleSupabaseError(error);
     }
 
@@ -288,7 +288,7 @@ export const updateRegistration = createServerFn({ method: "POST" })
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           redirect: "follow",
           body: JSON.stringify({
-            created_at: updatedApp.updated_at || new Date().toISOString(),
+            created_at: updatedApp?.updated_at || new Date().toISOString(),
             registration_no: data.registrationNo,
             full_name: data.fullName,
             scholar_number: data.scholarNumber.toUpperCase(),

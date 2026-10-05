@@ -22,10 +22,10 @@ ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
 
 -- Grant permissions to anon and authenticated roles
 GRANT ALL ON public.applications TO service_role;
-GRANT INSERT, SELECT ON public.applications TO anon;
-GRANT INSERT, SELECT ON public.applications TO authenticated;
+GRANT INSERT, SELECT, UPDATE ON public.applications TO anon;
+GRANT INSERT, SELECT, UPDATE ON public.applications TO authenticated;
 
--- Policies for anon submission and read
+-- Policies for anon submission, read, and update
 DROP POLICY IF EXISTS "Anyone can submit an application" ON public.applications;
 CREATE POLICY "Anyone can submit an application"
 ON public.applications
@@ -39,6 +39,14 @@ ON public.applications
 FOR SELECT
 TO anon, authenticated
 USING (true);
+
+DROP POLICY IF EXISTS "Anyone can update their application" ON public.applications;
+CREATE POLICY "Anyone can update their application"
+ON public.applications
+FOR UPDATE
+TO anon, authenticated
+USING (true)
+WITH CHECK (true);
 
 -- Auto update timestamp trigger
 CREATE OR REPLACE FUNCTION public.set_applications_updated_at()
