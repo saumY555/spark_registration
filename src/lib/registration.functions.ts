@@ -9,16 +9,36 @@ const tracks = [
   "Events and Outreach",
 ] as const;
 
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 const registrationSchema = z
   .object({
-    fullName: z.string().trim().min(2).max(100),
-    email: z.string().trim().email().max(255),
-    phone: z.string().trim().regex(/^\+?[0-9\s-]{10,15}$/),
-    scholarNumber: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9/-]+$/),
+    fullName: z.string().trim().min(2, "Please enter your full name.").max(100),
+    email: z
+      .string()
+      .trim()
+      .max(255)
+      .refine((val) => emailRegex.test(val), {
+        message: "Please enter a valid email address (e.g. name@example.com).",
+      }),
+    phone: z
+      .string()
+      .trim()
+      .refine((val) => {
+        const digits = val.replace(/\D/g, "");
+        return (
+          digits.length === 10 ||
+          (digits.length === 12 && digits.startsWith("91")) ||
+          (digits.length === 11 && digits.startsWith("0"))
+        );
+      }, {
+        message: "Please enter a valid 10-digit phone number.",
+      }),
+    scholarNumber: z.string().trim().min(3, "Please enter a valid scholar number.").max(30).regex(/^[a-zA-Z0-9/-]+$/),
     primaryTrack: z.enum(tracks),
     secondaryTrack: z.enum(tracks).optional(),
     portfolioUrl: z.union([z.literal(""), z.string().trim().url().max(500)]).optional(),
-    motivation: z.string().trim().min(20).max(800),
+    motivation: z.string().trim().min(20, "Motivation must be at least 20 characters.").max(800),
     consent: z.literal(true),
   })
   .refine((data) => data.primaryTrack !== data.secondaryTrack, {

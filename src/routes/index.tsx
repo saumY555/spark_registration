@@ -49,24 +49,55 @@ function Index() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setSubmitting(true);
     const form = new FormData(event.currentTarget);
+
     if (form.get("consent") !== "on") {
       setError("Please confirm your eligibility before submitting.");
-      setSubmitting(false);
       return;
     }
+
+    const email = String(form.get("email") ?? "").trim();
+    const phone = String(form.get("phone") ?? "").trim();
+    const motivation = String(form.get("motivation") ?? "").trim();
+
+    // Standard email validation (name@domain.ext)
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError("Please enter a valid email address (e.g. name@example.com).");
+      return;
+    }
+
+    // 10-digit phone validation
+    const digitsOnly = phone.replace(/\D/g, "");
+    const isValidPhone =
+      digitsOnly.length === 10 ||
+      (digitsOnly.length === 12 && digitsOnly.startsWith("91")) ||
+      (digitsOnly.length === 11 && digitsOnly.startsWith("0"));
+
+    if (!isValidPhone) {
+      setError("Please enter a valid 10-digit phone number (e.g. 9876543210).");
+      return;
+    }
+
+    if (motivation.length < 20) {
+      setError("Please write at least 20 characters explaining why you want to join Spark.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const response = await submit({
         data: {
           fullName: String(form.get("fullName") ?? ""),
-          email: String(form.get("email") ?? ""),
-          phone: String(form.get("phone") ?? ""),
+          email,
+          phone,
           scholarNumber: String(form.get("scholarNumber") ?? ""),
-          primaryTrack: String(form.get("primaryTrack") ?? "") as typeof tracks[number]["value"],
-          secondaryTrack: form.get("secondaryTrack") ? String(form.get("secondaryTrack")) as typeof tracks[number]["value"] : undefined,
+          primaryTrack: String(form.get("primaryTrack") ?? "") as (typeof tracks)[number]["value"],
+          secondaryTrack: form.get("secondaryTrack")
+            ? (String(form.get("secondaryTrack")) as (typeof tracks)[number]["value"])
+            : undefined,
           portfolioUrl: String(form.get("portfolioUrl") ?? ""),
-          motivation: String(form.get("motivation") ?? ""),
+          motivation,
           consent: true,
         },
       });
@@ -179,10 +210,10 @@ function Index() {
           ) : (
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Full name"><Input name="fullName" autoComplete="name" required maxLength={100} /></Field>
-                <Field label="Scholar number"><Input name="scholarNumber" required maxLength={30} /></Field>
-                <Field label="Institute email"><Input name="email" type="email" autoComplete="email" required maxLength={255} /></Field>
-                <Field label="Phone number"><Input name="phone" type="tel" autoComplete="tel" required minLength={10} maxLength={15} /></Field>
+                <Field label="Full name"><Input name="fullName" autoComplete="name" placeholder="Your full name" required maxLength={100} /></Field>
+                <Field label="Scholar number"><Input name="scholarNumber" placeholder="e.g. 25U010" required maxLength={30} /></Field>
+                <Field label="Email address"><Input name="email" type="email" autoComplete="email" placeholder="name@example.com" required maxLength={255} /></Field>
+                <Field label="Phone number"><Input name="phone" type="tel" autoComplete="tel" placeholder="10-digit mobile number" required minLength={10} maxLength={15} /></Field>
                 <Field label="Primary track">
                   <Select name="primaryTrack" required value={primaryTrack} onChange={(event) => setPrimaryTrack(event.target.value)}><option value="">Choose your main track</option>{tracks.map((track) => <option key={track.value} value={track.value}>{track.name}</option>)}</Select>
                 </Field>
