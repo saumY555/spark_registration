@@ -35,6 +35,33 @@ function generateRegistrationNo() {
   return `SGT26-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
+function handleSupabaseError(error: unknown) {
+  if (error && typeof error === "object") {
+    const err = error as { code?: string; message?: string; details?: string };
+    const errorMsg = (err.message || "").toLowerCase();
+    const details = (err.details || "").toLowerCase();
+
+    if (err.code === "23505" || errorMsg.includes("duplicate") || errorMsg.includes("unique")) {
+      if (errorMsg.includes("scholar_number") || details.includes("scholar_number")) {
+        throw new Error("An application with this Scholar Number has already been submitted.");
+      }
+      if (
+        errorMsg.includes("institute_email") ||
+        errorMsg.includes("email") ||
+        details.includes("institute_email") ||
+        details.includes("email")
+      ) {
+        throw new Error("An application with this Institute Email has already been submitted.");
+      }
+      throw new Error("An application with this email or scholar number has already been submitted.");
+    }
+  }
+
+  console.error("[Supabase Error]", error);
+  const message = error && typeof error === "object" && "message" in error ? String(error.message) : "We couldn't save your registration. Please try again.";
+  throw new Error(message);
+}
+
 export const submitRegistration = createServerFn({ method: "POST" })
   .validator((input: RegistrationInput) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
@@ -54,38 +81,55 @@ export const submitRegistration = createServerFn({ method: "POST" })
       first_year_confirmed: data.consent,
     };
 
-    const { data: application, error } = await supabaseAdmin
+    let regNo = defaultRegNo;
+    let createdAt = new Date().toISOString();
+
+    // 1. Attempt inserting into applications table
+    const appResult = await supabaseAdmin
       .from("applications")
       .insert(insertData)
       .select("id, registration_no, created_at")
       .single();
 
-    if (error || !application) {
-      if (error) {
-        const errorMsg = (error.message || "").toLowerCase();
-        const details = (error.details || "").toLowerCase();
+    if (!appResult.error && appResult.data) {
+      regNo = appResult.data.registration_no || defaultRegNo;
+      createdAt = appResult.data.created_at || createdAt;
+    } else if (
+      appResult.error &&
+      (appResult.error.code === "PGRST205" ||
+        appResult.error.code === "42P01" ||
+        appResult.error.message?.includes("applications") ||
+        appResult.error.message?.includes("schema cache"))
+    ) {
+      // 2. Fall back to existing spark_registrations table if applications is not yet created in Supabase
+      console.warn("applications table not found in Supabase schema cache, saving to spark_registrations table");
+      const legacyResult = await supabaseAdmin
+        .from("spark_registrations")
+        .insert({
+          candidate_id: defaultRegNo,
+          full_name: data.fullName,
+          email: data.email.toLowerCase(),
+          phone: data.phone,
+          scholar_number: data.scholarNumber.toUpperCase(),
+          primary_track: data.primaryTrack,
+          secondary_track: data.secondaryTrack ?? null,
+          portfolio_url: data.portfolioUrl || null,
+          motivation: data.motivation,
+          consent: data.consent,
+        })
+        .select("id, candidate_id, created_at")
+        .single();
 
-        if (error.code === "23505" || errorMsg.includes("duplicate") || errorMsg.includes("unique")) {
-          if (errorMsg.includes("scholar_number") || details.includes("scholar_number")) {
-            throw new Error("An application with this Scholar Number has already been submitted.");
-          }
-          if (
-            errorMsg.includes("institute_email") ||
-            errorMsg.includes("email") ||
-            details.includes("institute_email") ||
-            details.includes("email")
-          ) {
-            throw new Error("An application with this Institute Email has already been submitted.");
-          }
-          throw new Error("An application with this email or scholar number has already been submitted.");
-        }
+      if (legacyResult.error || !legacyResult.data) {
+        handleSupabaseError(legacyResult.error);
+      } else {
+        regNo = legacyResult.data.candidate_id || defaultRegNo;
+        createdAt = legacyResult.data.created_at || createdAt;
       }
-
-      console.error("[Supabase Error]", error);
-      throw new Error(error?.message || "We couldn't save your registration. Please try again.");
+    } else {
+      handleSupabaseError(appResult.error);
     }
 
-    const regNo = application.registration_no || defaultRegNo;
     let sheetSynced = false;
     let sheetSyncError: string | null = null;
     const lovableKey = process.env["LOVABLE_API_KEY"];
@@ -105,7 +149,7 @@ export const submitRegistration = createServerFn({ method: "POST" })
             body: JSON.stringify({
               majorDimension: "ROWS",
               values: [[
-                application.created_at,
+                createdAt,
                 regNo,
                 data.fullName,
                 data.email.toLowerCase(),
