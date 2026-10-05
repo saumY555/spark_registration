@@ -128,10 +128,42 @@ export const submitRegistration = createServerFn({ method: "POST" })
     const regNo = application.registration_no || defaultRegNo;
     let sheetSynced = false;
     let sheetSyncError: string | null = null;
+    const webhookUrl = process.env["GOOGLE_SHEETS_WEBHOOK_URL"];
     const lovableKey = process.env["LOVABLE_API_KEY"];
     const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
 
-    if (lovableKey && sheetsKey) {
+    if (webhookUrl) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            created_at: application.created_at,
+            registration_no: regNo,
+            full_name: data.fullName,
+            scholar_number: data.scholarNumber.toUpperCase(),
+            institute_email: data.email.toLowerCase(),
+            phone_number: data.phone,
+            primary_track: data.primaryTrack,
+            secondary_track: data.secondaryTrack ?? "",
+            portfolio_url: data.portfolioUrl ?? "",
+            motivation: data.motivation,
+            first_year_confirmed: "Yes",
+            status: "pending",
+          }),
+        });
+
+        if (response.ok) {
+          sheetSynced = true;
+        } else {
+          const body = await response.text();
+          console.warn("Google Sheets Webhook returned error:", response.status, body);
+        }
+      } catch (webhookError) {
+        sheetSyncError = webhookError instanceof Error ? webhookError.message : "Unknown webhook error";
+        console.error("Google Sheets Webhook sync failed:", sheetSyncError);
+      }
+    } else if (lovableKey && sheetsKey) {
       try {
         const response = await fetch(
           `${GATEWAY_URL}/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A:M:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
