@@ -41,7 +41,7 @@ function Index() {
   const submit = useServerFn(submitRegistration);
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ candidateId: string; sheetSynced: boolean } | null>(null);
+  const [result, setResult] = useState<{ registrationNo?: string; candidateId?: string; sheetSynced: boolean } | null>(null);
   const [error, setError] = useState("");
   const [primaryTrack, setPrimaryTrack] = useState("");
   const secondaryOptions = useMemo(() => tracks.filter((track) => track.value !== primaryTrack), [primaryTrack]);
@@ -172,9 +172,9 @@ function Index() {
               <div className="mb-6 grid size-14 place-items-center bg-secondary"><Check className="size-8" /></div>
               <p className="text-xs font-extrabold uppercase text-primary">Registration complete</p>
               <h3 className="mt-2 font-display text-5xl uppercase">You’re in.</h3>
-              <p className="mt-4 text-muted-foreground">Save your candidate ID. The Spark team will use your email for event updates.</p>
-              <div className="mt-6 border border-foreground bg-background p-5"><span className="text-xs font-bold uppercase text-muted-foreground">Candidate ID</span><p className="mt-1 text-2xl font-extrabold">{result.candidateId}</p></div>
-              {!result.sheetSynced && <p className="mt-4 text-sm text-muted-foreground">Your registration is safely stored. The organisers’ Sheet could not be updated because its permissions currently block writing.</p>}
+              <p className="mt-4 text-muted-foreground">Save your registration number. The Spark team will use your email for event updates.</p>
+              <div className="mt-6 border border-foreground bg-background p-5"><span className="text-xs font-bold uppercase text-muted-foreground">Registration Number</span><p className="mt-1 text-2xl font-extrabold">{result.registrationNo || result.candidateId}</p></div>
+              {!result.sheetSynced && <p className="mt-4 text-sm text-muted-foreground">Your application is safely stored in Supabase.</p>}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">

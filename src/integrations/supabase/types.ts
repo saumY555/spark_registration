@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      applications: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          first_year_confirmed: boolean
+          full_name: string
+          id: string
+          institute_email: string
+          motivation: string
+          phone_number: string
+          portfolio_url: string | null
+          primary_track: string
+          registration_no: string
+          scholar_number: string
+          secondary_track: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          first_year_confirmed: boolean
+          full_name: string
+          id?: string
+          institute_email: string
+          motivation: string
+          phone_number: string
+          portfolio_url?: string | null
+          primary_track: string
+          registration_no?: string
+          scholar_number: string
+          secondary_track?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          first_year_confirmed?: boolean
+          full_name?: string
+          id?: string
+          institute_email?: string
+          motivation?: string
+          phone_number?: string
+          portfolio_url?: string | null
+          primary_track?: string
+          registration_no?: string
+          scholar_number?: string
+          secondary_track?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       spark_registrations: {
         Row: {
           candidate_id: string

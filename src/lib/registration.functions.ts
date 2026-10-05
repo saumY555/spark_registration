@@ -31,37 +31,61 @@ export type RegistrationInput = z.infer<typeof registrationSchema>;
 const SPREADSHEET_ID = "1O7-6hK2oc4Y_kkwL01GUFVK_gIU9-mB8JLrSTDFnJQ0";
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_sheets";
 
-function candidateId() {
+function generateRegistrationNo() {
   return `SGT26-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 export const submitRegistration = createServerFn({ method: "POST" })
-  .inputValidator((input: RegistrationInput) => registrationSchema.parse(input))
+  .validator((input: RegistrationInput) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
-    const id = candidateId();
+    const defaultRegNo = generateRegistrationNo();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: registration, error } = await supabaseAdmin
-      .from("spark_registrations")
-      .insert({
-        candidate_id: id,
-        full_name: data.fullName,
-        email: data.email.toLowerCase(),
-        phone: data.phone,
-        scholar_number: data.scholarNumber.toUpperCase(),
-        primary_track: data.primaryTrack,
-        secondary_track: data.secondaryTrack ?? null,
-        portfolio_url: data.portfolioUrl || null,
-        motivation: data.motivation,
-        consent: data.consent,
-      })
-      .select("id, created_at")
+    const insertData = {
+      registration_no: defaultRegNo,
+      full_name: data.fullName,
+      scholar_number: data.scholarNumber.toUpperCase(),
+      institute_email: data.email.toLowerCase(),
+      phone_number: data.phone,
+      primary_track: data.primaryTrack,
+      secondary_track: data.secondaryTrack ?? null,
+      portfolio_url: data.portfolioUrl || null,
+      motivation: data.motivation,
+      first_year_confirmed: data.consent,
+    };
+
+    const { data: application, error } = await supabaseAdmin
+      .from("applications")
+      .insert(insertData)
+      .select("id, registration_no, created_at")
       .single();
 
-    if (error || !registration) {
-      throw new Error("We couldn't save your registration. Please try again.");
+    if (error || !application) {
+      if (error) {
+        const errorMsg = (error.message || "").toLowerCase();
+        const details = (error.details || "").toLowerCase();
+
+        if (error.code === "23505" || errorMsg.includes("duplicate") || errorMsg.includes("unique")) {
+          if (errorMsg.includes("scholar_number") || details.includes("scholar_number")) {
+            throw new Error("An application with this Scholar Number has already been submitted.");
+          }
+          if (
+            errorMsg.includes("institute_email") ||
+            errorMsg.includes("email") ||
+            details.includes("institute_email") ||
+            details.includes("email")
+          ) {
+            throw new Error("An application with this Institute Email has already been submitted.");
+          }
+          throw new Error("An application with this email or scholar number has already been submitted.");
+        }
+      }
+
+      console.error("[Supabase Error]", error);
+      throw new Error(error?.message || "We couldn't save your registration. Please try again.");
     }
 
+    const regNo = application.registration_no || defaultRegNo;
     let sheetSynced = false;
     let sheetSyncError: string | null = null;
     const lovableKey = process.env["LOVABLE_API_KEY"];
@@ -81,8 +105,8 @@ export const submitRegistration = createServerFn({ method: "POST" })
             body: JSON.stringify({
               majorDimension: "ROWS",
               values: [[
-                registration.created_at,
-                id,
+                application.created_at,
+                regNo,
                 data.fullName,
                 data.email.toLowerCase(),
                 data.phone,
@@ -106,20 +130,13 @@ export const submitRegistration = createServerFn({ method: "POST" })
         sheetSynced = true;
       } catch (syncError) {
         sheetSyncError = syncError instanceof Error ? syncError.message : "Unknown sheet error";
-        console.error("Registration saved, but Sheet sync failed:", sheetSyncError);
+        console.error("Registration saved to Supabase, but Sheet sync failed:", sheetSyncError);
       }
-    } else {
-      sheetSyncError = "Google Sheets connection is not configured.";
     }
 
-    try {
-      await supabaseAdmin
-        .from("spark_registrations")
-        .update({ sheet_synced: sheetSynced, sheet_sync_error: sheetSyncError })
-        .eq("id", registration.id);
-    } catch (e) {
-      console.warn("Could not update sheet sync status:", e);
-    }
-
-    return { candidateId: id, sheetSynced };
+    return {
+      registrationNo: regNo,
+      candidateId: regNo,
+      sheetSynced,
+    };
   });
