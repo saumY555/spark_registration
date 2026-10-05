@@ -24,6 +24,13 @@ export function isValid10DigitPhone(val: string): boolean {
   return /^[6-9]\d{9}$/.test(clean);
 }
 
+export const scholarNumberRegex = /^[0-9]{2}[a-zA-Z0-9]{6,10}$/;
+
+export function isValidScholarNumber(val: string): boolean {
+  if (!val) return false;
+  return scholarNumberRegex.test(val.trim());
+}
+
 const registrationSchema = z
   .object({
     fullName: z.string().trim().min(2, "Please enter your full name.").max(100),
@@ -43,9 +50,9 @@ const registrationSchema = z
     scholarNumber: z
       .string()
       .trim()
-      .min(3, "Please enter a valid scholar number.")
-      .max(30)
-      .regex(/^[a-zA-Z0-9/-]+$/, "Scholar number must contain letters, numbers, or dashes."),
+      .refine((val) => isValidScholarNumber(val), {
+        message: "Please enter a valid scholar number (e.g. 25U010061 or 25P02F1028).",
+      }),
     primaryTrack: z.enum(tracks),
     secondaryTrack: z.enum(tracks).optional(),
     portfolioUrl: z.union([z.literal(""), z.string().trim().url().max(500)]).optional(),
@@ -128,15 +135,23 @@ export const submitRegistration = createServerFn({ method: "POST" })
     const regNo = application.registration_no || defaultRegNo;
     let sheetSynced = false;
     let sheetSyncError: string | null = null;
-    const webhookUrl = process.env["GOOGLE_SHEETS_WEBHOOK_URL"];
+    const webhookUrl =
+      process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
+      process.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] ||
+      (typeof import.meta !== "undefined" && import.meta.env
+        ? (import.meta.env["GOOGLE_SHEETS_WEBHOOK_URL"] as string) ||
+          (import.meta.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] as string)
+        : undefined);
+
     const lovableKey = process.env["LOVABLE_API_KEY"];
     const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
 
-    if (webhookUrl) {
+    if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
       try {
         const response = await fetch(webhookUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          redirect: "follow",
           body: JSON.stringify({
             created_at: application.created_at,
             registration_no: regNo,
@@ -155,6 +170,7 @@ export const submitRegistration = createServerFn({ method: "POST" })
 
         if (response.ok) {
           sheetSynced = true;
+          console.log("Successfully synced application to Google Sheets:", regNo);
         } else {
           const body = await response.text();
           console.warn("Google Sheets Webhook returned error:", response.status, body);

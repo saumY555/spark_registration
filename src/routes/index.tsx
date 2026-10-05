@@ -56,9 +56,17 @@ function Index() {
       return;
     }
 
+    const scholarNumber = String(form.get("scholarNumber") ?? "").trim().toUpperCase();
     const email = String(form.get("email") ?? "").trim();
     const phone = String(form.get("phone") ?? "").trim();
     const motivation = String(form.get("motivation") ?? "").trim();
+
+    // Scholar number validation (e.g. 25U010061 or 25P02F1028)
+    const scholarNumberRegex = /^[0-9]{2}[a-zA-Z0-9]{6,10}$/;
+    if (!scholarNumberRegex.test(scholarNumber)) {
+      setError("Please enter a valid scholar number (e.g. 25U010061 or 25P02F1028).");
+      return;
+    }
 
     // Standard email validation (name@domain.ext)
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -214,7 +222,7 @@ function Index() {
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Full name"><Input name="fullName" autoComplete="name" placeholder="Your full name" required maxLength={100} /></Field>
-                <Field label="Scholar number"><Input name="scholarNumber" placeholder="e.g. 25U010" required maxLength={30} /></Field>
+                <Field label="Scholar number"><Input name="scholarNumber" placeholder="e.g. 25U010061 or 25P02F1028" required maxLength={30} /></Field>
                 <Field label="Email address"><Input name="email" type="email" autoComplete="email" placeholder="name@example.com" required maxLength={255} /></Field>
                 <Field label="Phone number"><Input name="phone" type="tel" autoComplete="tel" placeholder="10-digit mobile number" required minLength={10} maxLength={15} /></Field>
                 <Field label="Primary track">
