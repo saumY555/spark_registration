@@ -244,9 +244,9 @@ function Index() {
   return (
     <main className="overflow-hidden bg-background text-foreground">
       <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-5 py-4 md:px-10">
-        <a href="#top" className="flex items-center gap-3" aria-label="Spark Got Talent home">
-          <img src="/spark-logo.png" alt="Spark Club" className="size-10 object-contain rounded-md shadow-sm" />
-          <span className="text-xs font-extrabold uppercase leading-tight">
+        <a href="#top" className="flex items-center gap-3.5" aria-label="Spark Got Talent home">
+          <img src="/spark-logo.png" alt="Spark Club" className="size-12 object-contain rounded-lg shadow-sm" />
+          <span className="text-xs sm:text-sm font-extrabold uppercase leading-tight">
             Spark Club<br />
             <span className="font-medium text-muted-foreground">IIIT Bhopal</span>
           </span>
