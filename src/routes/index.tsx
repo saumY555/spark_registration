@@ -3,8 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Trophy, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
-import posterAsset from "@/assets/spark-got-talent-poster.jpeg.asset.json";
-import logoAsset from "@/assets/spark-logo.png.asset.json";
+import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,7 +84,7 @@ function Index() {
     <main className="overflow-hidden bg-background text-foreground">
       <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-5 py-4 md:px-10">
         <a href="#top" className="flex items-center gap-3" aria-label="Spark Got Talent home">
-          <span className="grid size-10 place-items-center bg-stage"><img src={logoAsset.url} alt="Spark Club" className="h-8 w-8 object-contain" /></span>
+          <span className="grid size-10 place-items-center bg-stage"><img src="/favicon.png" alt="Spark Club" className="h-8 w-8 object-contain" /></span>
           <span className="text-xs font-extrabold uppercase leading-tight">Spark Club<br /><span className="font-medium text-muted-foreground">IIIT Bhopal</span></span>
         </a>
         <nav className="hidden items-center gap-8 text-xs font-bold uppercase md:flex">
@@ -120,7 +119,7 @@ function Index() {
         <div className="relative mx-auto w-full max-w-md">
           <div className="absolute -left-8 -top-8 size-28 bg-secondary spark-pulse" />
           <div className="relative rotate-2 border-2 border-foreground bg-stage p-3 shadow-[12px_12px_0_var(--primary)]">
-            <img src={posterAsset.url} alt="Spark Got Talent recruitment competition stage" className="aspect-[4/5] w-full object-cover object-top" />
+            <img src={sparkPoster} alt="Search for Spark recruitment poster" className="aspect-[4/5] w-full object-cover object-top" />
           </div>
           <div className="absolute -bottom-6 -left-8 -rotate-3 border-2 border-foreground bg-card px-5 py-3 text-sm font-extrabold uppercase shadow-[5px_5px_0_var(--foreground)]">No prior experience needed</div>
         </div>
