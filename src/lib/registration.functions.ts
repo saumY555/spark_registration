@@ -103,26 +103,36 @@ export const submitRegistration = createServerFn({ method: "POST" })
     ) {
       // 2. Fall back to existing spark_registrations table if applications is not yet created in Supabase
       console.warn("applications table not found in Supabase schema cache, saving to spark_registrations table");
+      const legacyPayload = {
+        candidate_id: defaultRegNo,
+        full_name: data.fullName,
+        email: data.email.toLowerCase(),
+        phone: data.phone,
+        scholar_number: data.scholarNumber.toUpperCase(),
+        year: "First year",
+        primary_track: data.primaryTrack,
+        secondary_track: data.secondaryTrack ?? null,
+        portfolio_url: data.portfolioUrl || null,
+        motivation: data.motivation,
+        consent: true,
+      };
+
       const legacyResult = await supabaseAdmin
         .from("spark_registrations")
-        .insert({
-          candidate_id: defaultRegNo,
-          full_name: data.fullName,
-          email: data.email.toLowerCase(),
-          phone: data.phone,
-          scholar_number: data.scholarNumber.toUpperCase(),
-          primary_track: data.primaryTrack,
-          secondary_track: data.secondaryTrack ?? null,
-          portfolio_url: data.portfolioUrl || null,
-          motivation: data.motivation,
-          consent: data.consent,
-        })
+        .insert(legacyPayload)
         .select("id, candidate_id, created_at")
-        .single();
+        .maybeSingle();
 
-      if (legacyResult.error || !legacyResult.data) {
-        handleSupabaseError(legacyResult.error);
-      } else {
+      if (legacyResult.error) {
+        // If SELECT failed due to RLS, try simple insert without SELECT
+        const plainInsert = await supabaseAdmin
+          .from("spark_registrations")
+          .insert(legacyPayload);
+
+        if (plainInsert.error) {
+          handleSupabaseError(plainInsert.error);
+        }
+      } else if (legacyResult.data) {
         regNo = legacyResult.data.candidate_id || defaultRegNo;
         createdAt = legacyResult.data.created_at || createdAt;
       }
