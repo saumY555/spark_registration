@@ -9,7 +9,20 @@ const tracks = [
   "Events and Outreach",
 ] as const;
 
-const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+export const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+export function isValid10DigitPhone(val: string): boolean {
+  if (!val) return false;
+  let clean = val.trim().replace(/[\s\-\(\)]/g, "");
+  if (clean.startsWith("+91")) {
+    clean = clean.slice(3);
+  } else if (clean.startsWith("91") && clean.length === 12) {
+    clean = clean.slice(2);
+  } else if (clean.startsWith("0") && clean.length === 11) {
+    clean = clean.slice(1);
+  }
+  return /^[6-9]\d{9}$/.test(clean);
+}
 
 const registrationSchema = z
   .object({
@@ -24,17 +37,15 @@ const registrationSchema = z
     phone: z
       .string()
       .trim()
-      .refine((val) => {
-        const digits = val.replace(/\D/g, "");
-        return (
-          digits.length === 10 ||
-          (digits.length === 12 && digits.startsWith("91")) ||
-          (digits.length === 11 && digits.startsWith("0"))
-        );
-      }, {
-        message: "Please enter a valid 10-digit phone number.",
+      .refine((val) => isValid10DigitPhone(val), {
+        message: "Please enter a valid 10-digit mobile number (e.g. 9876543210 or +91 9876543210).",
       }),
-    scholarNumber: z.string().trim().min(3, "Please enter a valid scholar number.").max(30).regex(/^[a-zA-Z0-9/-]+$/),
+    scholarNumber: z
+      .string()
+      .trim()
+      .min(3, "Please enter a valid scholar number.")
+      .max(30)
+      .regex(/^[a-zA-Z0-9/-]+$/, "Scholar number must contain letters, numbers, or dashes."),
     primaryTrack: z.enum(tracks),
     secondaryTrack: z.enum(tracks).optional(),
     portfolioUrl: z.union([z.literal(""), z.string().trim().url().max(500)]).optional(),
@@ -55,7 +66,7 @@ function generateRegistrationNo() {
   return `SGT26-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
-function handleSupabaseError(error: unknown) {
+function handleSupabaseError(error: unknown): never {
   if (error && typeof error === "object") {
     const err = error as { code?: string; message?: string; details?: string };
     const errorMsg = (err.message || "").toLowerCase();
@@ -71,14 +82,17 @@ function handleSupabaseError(error: unknown) {
         details.includes("institute_email") ||
         details.includes("email")
       ) {
-        throw new Error("An application with this Institute Email has already been submitted.");
+        throw new Error("An application with this Email Address has already been submitted.");
       }
       throw new Error("An application with this email or scholar number has already been submitted.");
     }
   }
 
   console.error("[Supabase Error]", error);
-  const message = error && typeof error === "object" && "message" in error ? String(error.message) : "We couldn't save your registration. Please try again.";
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String(error.message)
+      : "We couldn't save your registration. Please try again.";
   throw new Error(message);
 }
 
@@ -101,65 +115,17 @@ export const submitRegistration = createServerFn({ method: "POST" })
       first_year_confirmed: data.consent,
     };
 
-    let regNo = defaultRegNo;
-    let createdAt = new Date().toISOString();
-
-    // 1. Attempt inserting into applications table
-    const appResult = await supabaseAdmin
+    const { data: application, error } = await supabaseAdmin
       .from("applications")
       .insert(insertData)
       .select("id, registration_no, created_at")
       .single();
 
-    if (!appResult.error && appResult.data) {
-      regNo = appResult.data.registration_no || defaultRegNo;
-      createdAt = appResult.data.created_at || createdAt;
-    } else if (
-      appResult.error &&
-      (appResult.error.code === "PGRST205" ||
-        appResult.error.code === "42P01" ||
-        appResult.error.message?.includes("applications") ||
-        appResult.error.message?.includes("schema cache"))
-    ) {
-      // 2. Fall back to existing spark_registrations table if applications is not yet created in Supabase
-      console.warn("applications table not found in Supabase schema cache, saving to spark_registrations table");
-      const legacyPayload = {
-        candidate_id: defaultRegNo,
-        full_name: data.fullName,
-        email: data.email.toLowerCase(),
-        phone: data.phone,
-        scholar_number: data.scholarNumber.toUpperCase(),
-        year: "First year",
-        primary_track: data.primaryTrack,
-        secondary_track: data.secondaryTrack ?? null,
-        portfolio_url: data.portfolioUrl || null,
-        motivation: data.motivation,
-        consent: true,
-      };
-
-      const legacyResult = await supabaseAdmin
-        .from("spark_registrations")
-        .insert(legacyPayload)
-        .select("id, candidate_id, created_at")
-        .maybeSingle();
-
-      if (legacyResult.error) {
-        // If SELECT failed due to RLS, try simple insert without SELECT
-        const plainInsert = await supabaseAdmin
-          .from("spark_registrations")
-          .insert(legacyPayload);
-
-        if (plainInsert.error) {
-          handleSupabaseError(plainInsert.error);
-        }
-      } else if (legacyResult.data) {
-        regNo = legacyResult.data.candidate_id || defaultRegNo;
-        createdAt = legacyResult.data.created_at || createdAt;
-      }
-    } else {
-      handleSupabaseError(appResult.error);
+    if (error || !application) {
+      handleSupabaseError(error);
     }
 
+    const regNo = application.registration_no || defaultRegNo;
     let sheetSynced = false;
     let sheetSyncError: string | null = null;
     const lovableKey = process.env["LOVABLE_API_KEY"];
@@ -179,7 +145,7 @@ export const submitRegistration = createServerFn({ method: "POST" })
             body: JSON.stringify({
               majorDimension: "ROWS",
               values: [[
-                createdAt,
+                application.created_at,
                 regNo,
                 data.fullName,
                 data.email.toLowerCase(),

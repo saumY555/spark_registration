@@ -68,14 +68,17 @@ function Index() {
     }
 
     // 10-digit phone validation
-    const digitsOnly = phone.replace(/\D/g, "");
-    const isValidPhone =
-      digitsOnly.length === 10 ||
-      (digitsOnly.length === 12 && digitsOnly.startsWith("91")) ||
-      (digitsOnly.length === 11 && digitsOnly.startsWith("0"));
+    let cleanPhone = phone.trim().replace(/[\s\-\(\)]/g, "");
+    if (cleanPhone.startsWith("+91")) {
+      cleanPhone = cleanPhone.slice(3);
+    } else if (cleanPhone.startsWith("91") && cleanPhone.length === 12) {
+      cleanPhone = cleanPhone.slice(2);
+    } else if (cleanPhone.startsWith("0") && cleanPhone.length === 11) {
+      cleanPhone = cleanPhone.slice(1);
+    }
 
-    if (!isValidPhone) {
-      setError("Please enter a valid 10-digit phone number (e.g. 9876543210).");
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setError("Please enter a valid 10-digit phone number (e.g. 9876543210 or +91 9876543210).");
       return;
     }
 
