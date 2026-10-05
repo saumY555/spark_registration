@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, Trophy, Users } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, useEffect, type FormEvent } from "react";
 
 import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,29 @@ function Index() {
     portfolioUrl: "",
     motivation: "",
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sgt26_registration");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.registrationNo) {
+          setRegisteredNo(parsed.registrationNo);
+          setResult({
+            registrationNo: parsed.registrationNo,
+            candidateId: parsed.registrationNo,
+            isUpdated: parsed.isUpdated ?? false,
+            sheetSynced: true,
+          });
+          if (parsed.formValues) {
+            setFormValues(parsed.formValues);
+          }
+        }
+      }
+    } catch {
+      // Ignore localStorage read errors
+    }
+  }, []);
 
   const secondaryOptions = useMemo(
     () => tracks.filter((track) => track.value !== formValues.primaryTrack),
@@ -120,8 +143,20 @@ function Index() {
 
     setSubmitting(true);
     try {
+      const newFormValues = {
+        fullName,
+        scholarNumber,
+        email,
+        phone,
+        primaryTrack,
+        secondaryTrack: secondaryTrack || "",
+        portfolioUrl,
+        motivation,
+      };
+
+      let response;
       if (isEditing && registeredNo) {
-        const response = await update({
+        response = await update({
           data: {
             registrationNo: registeredNo,
             fullName,
@@ -135,20 +170,9 @@ function Index() {
             consent: true,
           },
         });
-        setFormValues({
-          fullName,
-          scholarNumber,
-          email,
-          phone,
-          primaryTrack,
-          secondaryTrack: secondaryTrack || "",
-          portfolioUrl,
-          motivation,
-        });
-        setResult(response);
         setIsEditing(false);
       } else {
-        const response = await submit({
+        response = await submit({
           data: {
             fullName,
             email,
@@ -161,18 +185,23 @@ function Index() {
             consent: true,
           },
         });
-        setFormValues({
-          fullName,
-          scholarNumber,
-          email,
-          phone,
-          primaryTrack,
-          secondaryTrack: secondaryTrack || "",
-          portfolioUrl,
-          motivation,
-        });
-        setRegisteredNo(response.registrationNo);
-        setResult(response);
+      }
+
+      setFormValues(newFormValues);
+      setRegisteredNo(response.registrationNo);
+      setResult(response);
+
+      try {
+        localStorage.setItem(
+          "sgt26_registration",
+          JSON.stringify({
+            registrationNo: response.registrationNo,
+            isUpdated: response.isUpdated ?? false,
+            formValues: newFormValues,
+          })
+        );
+      } catch {
+        // Ignore localStorage error
       }
 
       router.invalidate();
@@ -191,6 +220,11 @@ function Index() {
   }
 
   function handleNewApplicationClick() {
+    try {
+      localStorage.removeItem("sgt26_registration");
+    } catch {
+      // Ignore
+    }
     setIsEditing(false);
     setRegisteredNo(null);
     setResult(null);

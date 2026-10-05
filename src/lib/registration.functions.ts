@@ -109,14 +109,100 @@ function handleSupabaseError(error: unknown): never {
 export const submitRegistration = createServerFn({ method: "POST" })
   .validator((input: RegistrationInput) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
-    const defaultRegNo = generateRegistrationNo();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const normalizedScholar = data.scholarNumber.toUpperCase().trim();
+    const normalizedEmail = data.email.toLowerCase().trim();
 
+    // Check if an application already exists for this scholar number or email
+    const { data: existingApp } = await supabaseAdmin
+      .from("applications")
+      .select("id, registration_no, created_at")
+      .or(`scholar_number.eq.${normalizedScholar},institute_email.eq.${normalizedEmail}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const webhookUrl =
+      process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
+      process.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] ||
+      (typeof import.meta !== "undefined" && import.meta.env
+        ? (import.meta.env["GOOGLE_SHEETS_WEBHOOK_URL"] as string) ||
+          (import.meta.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] as string)
+        : undefined);
+
+    const lovableKey = process.env["LOVABLE_API_KEY"];
+    const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
+
+    // If an application already exists, update it instead of creating a duplicate row!
+    if (existingApp && existingApp.registration_no) {
+      const regNo = existingApp.registration_no;
+      const updatePayload = {
+        full_name: data.fullName,
+        scholar_number: normalizedScholar,
+        institute_email: normalizedEmail,
+        phone_number: data.phone,
+        primary_track: data.primaryTrack,
+        secondary_track: data.secondaryTrack ?? null,
+        portfolio_url: data.portfolioUrl || null,
+        motivation: data.motivation,
+        first_year_confirmed: data.consent,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: updatedApp, error: updateError } = await supabaseAdmin
+        .from("applications")
+        .update(updatePayload)
+        .eq("id", existingApp.id)
+        .select("id, registration_no, created_at, updated_at")
+        .maybeSingle();
+
+      if (updateError) {
+        handleSupabaseError(updateError);
+      }
+
+      let sheetSynced = false;
+      if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
+        try {
+          const response = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            redirect: "follow",
+            body: JSON.stringify({
+              created_at: updatedApp?.updated_at || new Date().toISOString(),
+              registration_no: regNo,
+              full_name: data.fullName,
+              scholar_number: normalizedScholar,
+              institute_email: normalizedEmail,
+              phone_number: data.phone,
+              primary_track: data.primaryTrack,
+              secondary_track: data.secondaryTrack ?? "",
+              portfolio_url: data.portfolioUrl ?? "",
+              motivation: data.motivation,
+              first_year_confirmed: "Yes",
+              status: "updated",
+            }),
+          });
+          if (response.ok) sheetSynced = true;
+        } catch (webhookError) {
+          console.error("Google Sheets update sync failed:", webhookError);
+        }
+      }
+
+      return {
+        registrationNo: regNo,
+        candidateId: regNo,
+        sheetSynced,
+        isUpdated: true,
+      };
+    }
+
+    // Otherwise, perform a new insertion
+    const defaultRegNo = generateRegistrationNo();
     const insertData = {
       registration_no: defaultRegNo,
       full_name: data.fullName,
-      scholar_number: data.scholarNumber.toUpperCase(),
-      institute_email: data.email.toLowerCase(),
+      scholar_number: normalizedScholar,
+      institute_email: normalizedEmail,
       phone_number: data.phone,
       primary_track: data.primaryTrack,
       secondary_track: data.secondaryTrack ?? null,
@@ -137,17 +223,6 @@ export const submitRegistration = createServerFn({ method: "POST" })
 
     const regNo = application?.registration_no || defaultRegNo;
     let sheetSynced = false;
-    let sheetSyncError: string | null = null;
-    const webhookUrl =
-      process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
-      process.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] ||
-      (typeof import.meta !== "undefined" && import.meta.env
-        ? (import.meta.env["GOOGLE_SHEETS_WEBHOOK_URL"] as string) ||
-          (import.meta.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] as string)
-        : undefined);
-
-    const lovableKey = process.env["LOVABLE_API_KEY"];
-    const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
 
     if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
       try {
@@ -159,8 +234,8 @@ export const submitRegistration = createServerFn({ method: "POST" })
             created_at: application?.created_at || new Date().toISOString(),
             registration_no: regNo,
             full_name: data.fullName,
-            scholar_number: data.scholarNumber.toUpperCase(),
-            institute_email: data.email.toLowerCase(),
+            scholar_number: normalizedScholar,
+            institute_email: normalizedEmail,
             phone_number: data.phone,
             primary_track: data.primaryTrack,
             secondary_track: data.secondaryTrack ?? "",
@@ -174,13 +249,9 @@ export const submitRegistration = createServerFn({ method: "POST" })
         if (response.ok) {
           sheetSynced = true;
           console.log("Successfully synced application to Google Sheets:", regNo);
-        } else {
-          const body = await response.text();
-          console.warn("Google Sheets Webhook returned error:", response.status, body);
         }
       } catch (webhookError) {
-        sheetSyncError = webhookError instanceof Error ? webhookError.message : "Unknown webhook error";
-        console.error("Google Sheets Webhook sync failed:", sheetSyncError);
+        console.error("Google Sheets Webhook sync failed:", webhookError);
       }
     } else if (lovableKey && sheetsKey) {
       try {
@@ -199,9 +270,9 @@ export const submitRegistration = createServerFn({ method: "POST" })
                 application?.created_at || new Date().toISOString(),
                 regNo,
                 data.fullName,
-                data.email.toLowerCase(),
+                normalizedEmail,
                 data.phone,
-                data.scholarNumber.toUpperCase(),
+                normalizedScholar,
                 "First year",
                 data.primaryTrack,
                 data.secondaryTrack ?? "",
@@ -214,14 +285,11 @@ export const submitRegistration = createServerFn({ method: "POST" })
           },
         );
 
-        if (!response.ok) {
-          const body = await response.text();
-          throw new Error(`Google Sheets returned ${response.status}: ${body.slice(0, 300)}`);
+        if (response.ok) {
+          sheetSynced = true;
         }
-        sheetSynced = true;
       } catch (syncError) {
-        sheetSyncError = syncError instanceof Error ? syncError.message : "Unknown sheet error";
-        console.error("Registration saved to Supabase, but Sheet sync failed:", sheetSyncError);
+        console.error("Registration saved to Supabase, but Sheet sync failed:", syncError);
       }
     }
 
@@ -229,6 +297,7 @@ export const submitRegistration = createServerFn({ method: "POST" })
       registrationNo: regNo,
       candidateId: regNo,
       sheetSynced,
+      isUpdated: false,
     };
   });
 
@@ -247,11 +316,13 @@ export const updateRegistration = createServerFn({ method: "POST" })
   .validator((input: UpdateRegistrationInput) => updateSchema.parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const normalizedScholar = data.scholarNumber.toUpperCase().trim();
+    const normalizedEmail = data.email.toLowerCase().trim();
 
     const updatePayload = {
       full_name: data.fullName,
-      scholar_number: data.scholarNumber.toUpperCase(),
-      institute_email: data.email.toLowerCase(),
+      scholar_number: normalizedScholar,
+      institute_email: normalizedEmail,
       phone_number: data.phone,
       primary_track: data.primaryTrack,
       secondary_track: data.secondaryTrack ?? null,
@@ -261,17 +332,31 @@ export const updateRegistration = createServerFn({ method: "POST" })
       updated_at: new Date().toISOString(),
     };
 
-    const { data: updatedApp, error } = await supabaseAdmin
+    let { data: updatedApp, error } = await supabaseAdmin
       .from("applications")
       .update(updatePayload)
       .eq("registration_no", data.registrationNo)
       .select("id, registration_no, created_at, updated_at")
       .maybeSingle();
 
+    if (!updatedApp && !error) {
+      // Fallback: try by scholar_number or email in case registration_no differed
+      const fallbackResult = await supabaseAdmin
+        .from("applications")
+        .update(updatePayload)
+        .or(`scholar_number.eq.${normalizedScholar},institute_email.eq.${normalizedEmail}`)
+        .select("id, registration_no, created_at, updated_at")
+        .maybeSingle();
+      
+      updatedApp = fallbackResult.data;
+      error = fallbackResult.error;
+    }
+
     if (error) {
       handleSupabaseError(error);
     }
 
+    const regNo = updatedApp?.registration_no || data.registrationNo;
     let sheetSynced = false;
     const webhookUrl =
       process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
@@ -289,10 +374,10 @@ export const updateRegistration = createServerFn({ method: "POST" })
           redirect: "follow",
           body: JSON.stringify({
             created_at: updatedApp?.updated_at || new Date().toISOString(),
-            registration_no: data.registrationNo,
+            registration_no: regNo,
             full_name: data.fullName,
-            scholar_number: data.scholarNumber.toUpperCase(),
-            institute_email: data.email.toLowerCase(),
+            scholar_number: normalizedScholar,
+            institute_email: normalizedEmail,
             phone_number: data.phone,
             primary_track: data.primaryTrack,
             secondary_track: data.secondaryTrack ?? "",
@@ -309,8 +394,8 @@ export const updateRegistration = createServerFn({ method: "POST" })
     }
 
     return {
-      registrationNo: data.registrationNo,
-      candidateId: data.registrationNo,
+      registrationNo: regNo,
+      candidateId: regNo,
       sheetSynced,
       isUpdated: true,
     };
