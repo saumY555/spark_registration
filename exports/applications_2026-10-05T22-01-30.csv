@@ -1,0 +1,3 @@
+registration_no,full_name,scholar_number,institute_email,phone_number,primary_track,secondary_track,portfolio_url,motivation,first_year_confirmed,status,created_at
+SGT26-5D368983,Saumy Sahu,25U010061,saumysahu613@gmail.com,+916392454351,Design and Media,Hardware and Robotics,,sadfdsfds fsdf dsf sdf asd,true,pending,2026-10-05T21:57:14.414659+00:00
+SGT26-TEST535,Test Verification Candidate,SCH33497,test24616@iiitbhopal.ac.in,+91 9876543210,Code and Web,,,This is a test application to verify Supabase integration.,true,pending,2026-10-05T21:55:54.103289+00:00

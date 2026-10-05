@@ -1,0 +1,36 @@
+[
+  {
+    "id": "07bd2df2-9540-43d1-80b9-d66b9fdc2913",
+    "registration_no": "SGT26-5D368983",
+    "full_name": "Saumy Sahu",
+    "scholar_number": "25U010061",
+    "institute_email": "saumysahu613@gmail.com",
+    "phone_number": "+916392454351",
+    "primary_track": "Design and Media",
+    "secondary_track": "Hardware and Robotics",
+    "portfolio_url": null,
+    "motivation": "sadfdsfds fsdf dsf sdf asd",
+    "first_year_confirmed": true,
+    "status": "pending",
+    "admin_notes": null,
+    "created_at": "2026-10-05T21:57:14.414659+00:00",
+    "updated_at": "2026-10-05T21:57:14.414659+00:00"
+  },
+  {
+    "id": "fcd37ff2-083f-43f9-8129-fca05d06ae75",
+    "registration_no": "SGT26-TEST535",
+    "full_name": "Test Verification Candidate",
+    "scholar_number": "SCH33497",
+    "institute_email": "test24616@iiitbhopal.ac.in",
+    "phone_number": "+91 9876543210",
+    "primary_track": "Code and Web",
+    "secondary_track": null,
+    "portfolio_url": null,
+    "motivation": "This is a test application to verify Supabase integration.",
+    "first_year_confirmed": true,
+    "status": "pending",
+    "admin_notes": null,
+    "created_at": "2026-10-05T21:55:54.103289+00:00",
+    "updated_at": "2026-10-05T21:55:54.103289+00:00"
+  }
+]
