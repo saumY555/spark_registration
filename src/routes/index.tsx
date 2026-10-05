@@ -1,13 +1,13 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Trophy, Users } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, Trophy, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
 import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitRegistration } from "@/lib/registration.functions";
+import { submitRegistration, updateRegistration } from "@/lib/registration.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,12 +39,29 @@ const stages = [
 
 function Index() {
   const submit = useServerFn(submitRegistration);
+  const update = useServerFn(updateRegistration);
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ registrationNo?: string; candidateId?: string; sheetSynced: boolean } | null>(null);
+  const [result, setResult] = useState<{ registrationNo?: string; candidateId?: string; isUpdated?: boolean; sheetSynced: boolean } | null>(null);
+  const [registeredNo, setRegisteredNo] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
-  const [primaryTrack, setPrimaryTrack] = useState("");
-  const secondaryOptions = useMemo(() => tracks.filter((track) => track.value !== primaryTrack), [primaryTrack]);
+
+  const [formValues, setFormValues] = useState({
+    fullName: "",
+    scholarNumber: "",
+    email: "",
+    phone: "",
+    primaryTrack: "",
+    secondaryTrack: "",
+    portfolioUrl: "",
+    motivation: "",
+  });
+
+  const secondaryOptions = useMemo(
+    () => tracks.filter((track) => track.value !== formValues.primaryTrack),
+    [formValues.primaryTrack]
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,9 +73,15 @@ function Index() {
       return;
     }
 
+    const fullName = String(form.get("fullName") ?? "").trim();
     const scholarNumber = String(form.get("scholarNumber") ?? "").trim().toUpperCase();
     const email = String(form.get("email") ?? "").trim();
     const phone = String(form.get("phone") ?? "").trim();
+    const primaryTrack = String(form.get("primaryTrack") ?? "") as (typeof tracks)[number]["value"];
+    const secondaryTrack = form.get("secondaryTrack")
+      ? (String(form.get("secondaryTrack")) as (typeof tracks)[number]["value"])
+      : undefined;
+    const portfolioUrl = String(form.get("portfolioUrl") ?? "").trim();
     const motivation = String(form.get("motivation") ?? "").trim();
 
     // Scholar number validation (e.g. 25U010061 or 25P02F1028)
@@ -97,22 +120,61 @@ function Index() {
 
     setSubmitting(true);
     try {
-      const response = await submit({
-        data: {
-          fullName: String(form.get("fullName") ?? ""),
+      if (isEditing && registeredNo) {
+        const response = await update({
+          data: {
+            registrationNo: registeredNo,
+            fullName,
+            email,
+            phone,
+            scholarNumber,
+            primaryTrack,
+            secondaryTrack,
+            portfolioUrl,
+            motivation,
+            consent: true,
+          },
+        });
+        setFormValues({
+          fullName,
+          scholarNumber,
           email,
           phone,
-          scholarNumber: String(form.get("scholarNumber") ?? ""),
-          primaryTrack: String(form.get("primaryTrack") ?? "") as (typeof tracks)[number]["value"],
-          secondaryTrack: form.get("secondaryTrack")
-            ? (String(form.get("secondaryTrack")) as (typeof tracks)[number]["value"])
-            : undefined,
-          portfolioUrl: String(form.get("portfolioUrl") ?? ""),
+          primaryTrack,
+          secondaryTrack: secondaryTrack || "",
+          portfolioUrl,
           motivation,
-          consent: true,
-        },
-      });
-      setResult(response);
+        });
+        setResult(response);
+        setIsEditing(false);
+      } else {
+        const response = await submit({
+          data: {
+            fullName,
+            email,
+            phone,
+            scholarNumber,
+            primaryTrack,
+            secondaryTrack,
+            portfolioUrl,
+            motivation,
+            consent: true,
+          },
+        });
+        setFormValues({
+          fullName,
+          scholarNumber,
+          email,
+          phone,
+          primaryTrack,
+          secondaryTrack: secondaryTrack || "",
+          portfolioUrl,
+          motivation,
+        });
+        setRegisteredNo(response.registrationNo);
+        setResult(response);
+      }
+
       router.invalidate();
       window.scrollTo({ top: document.getElementById("register")?.offsetTop ?? 0, behavior: "smooth" });
     } catch (submissionError) {
@@ -120,6 +182,29 @@ function Index() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleEditClick() {
+    setIsEditing(true);
+    setResult(null);
+    setError("");
+  }
+
+  function handleNewApplicationClick() {
+    setIsEditing(false);
+    setRegisteredNo(null);
+    setResult(null);
+    setError("");
+    setFormValues({
+      fullName: "",
+      scholarNumber: "",
+      email: "",
+      phone: "",
+      primaryTrack: "",
+      secondaryTrack: "",
+      portfolioUrl: "",
+      motivation: "",
+    });
   }
 
   return (
@@ -212,32 +297,180 @@ function Index() {
           {result ? (
             <div className="self-start border-2 border-foreground bg-card p-8 shadow-[10px_10px_0_var(--secondary)]" role="status">
               <div className="mb-6 grid size-14 place-items-center bg-secondary"><Check className="size-8" /></div>
-              <p className="text-xs font-extrabold uppercase text-primary">Registration complete</p>
-              <h3 className="mt-2 font-display text-5xl uppercase">You’re in.</h3>
-              <p className="mt-4 text-muted-foreground">Save your registration number. The Spark team will use your email for event updates.</p>
-              <div className="mt-6 border border-foreground bg-background p-5"><span className="text-xs font-bold uppercase text-muted-foreground">Registration Number</span><p className="mt-1 text-2xl font-extrabold">{result.registrationNo || result.candidateId}</p></div>
-              {!result.sheetSynced && <p className="mt-4 text-sm text-muted-foreground">Your application is safely stored in Supabase.</p>}
+              <p className="text-xs font-extrabold uppercase text-primary">
+                {result.isUpdated ? "Application updated" : "Registration complete"}
+              </p>
+              <h3 className="mt-2 font-display text-5xl uppercase">
+                {result.isUpdated ? "Changes saved." : "You’re in."}
+              </h3>
+              <p className="mt-4 text-muted-foreground">
+                {result.isUpdated
+                  ? "Your updated application has been saved. The organisers’ records are synced."
+                  : "Save your registration number. The Spark team will use your email for event updates."}
+              </p>
+              <div className="mt-6 border border-foreground bg-background p-5">
+                <span className="text-xs font-bold uppercase text-muted-foreground">Registration Number</span>
+                <p className="mt-1 text-2xl font-extrabold">{result.registrationNo || result.candidateId}</p>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Button type="button" variant="electric" onClick={handleEditClick}>
+                  <Edit3 className="mr-1 size-4" /> Edit your response
+                </Button>
+                <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
+                  <RotateCcw className="mr-1 size-4" /> Submit another application
+                </Button>
+              </div>
+              {!result.sheetSynced && (
+                <p className="mt-4 text-sm text-muted-foreground">Your application is safely stored in Supabase.</p>
+              )}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">
+              {isEditing && registeredNo && (
+                <div className="mb-6 flex items-center justify-between border-2 border-foreground bg-secondary/20 p-4">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase text-primary">Editing Mode</span>
+                    <p className="text-sm font-bold">
+                      Updating registration: <span className="font-extrabold">{registeredNo}</span>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setResult({ registrationNo: registeredNo, sheetSynced: true });
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Full name"><Input name="fullName" autoComplete="name" placeholder="Your full name" required maxLength={100} /></Field>
-                <Field label="Scholar number"><Input name="scholarNumber" placeholder="e.g. 25U010061 or 25P02F1028" required maxLength={30} /></Field>
-                <Field label="Email address"><Input name="email" type="email" autoComplete="email" placeholder="name@example.com" required maxLength={255} /></Field>
-                <Field label="Phone number"><Input name="phone" type="tel" autoComplete="tel" placeholder="10-digit mobile number" required minLength={10} maxLength={15} /></Field>
+                <Field label="Full name">
+                  <Input
+                    name="fullName"
+                    autoComplete="name"
+                    placeholder="Your full name"
+                    defaultValue={formValues.fullName}
+                    required
+                    maxLength={100}
+                  />
+                </Field>
+                <Field label="Scholar number">
+                  <Input
+                    name="scholarNumber"
+                    placeholder="e.g. 25U010061 or 25P02F1028"
+                    defaultValue={formValues.scholarNumber}
+                    required
+                    maxLength={30}
+                  />
+                </Field>
+                <Field label="Email address">
+                  <Input
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="name@example.com"
+                    defaultValue={formValues.email}
+                    required
+                    maxLength={255}
+                  />
+                </Field>
+                <Field label="Phone number">
+                  <Input
+                    name="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="10-digit mobile number"
+                    defaultValue={formValues.phone}
+                    required
+                    minLength={10}
+                    maxLength={15}
+                  />
+                </Field>
                 <Field label="Primary track">
-                  <Select name="primaryTrack" required value={primaryTrack} onChange={(event) => setPrimaryTrack(event.target.value)}><option value="">Choose your main track</option>{tracks.map((track) => <option key={track.value} value={track.value}>{track.name}</option>)}</Select>
+                  <Select
+                    name="primaryTrack"
+                    required
+                    value={formValues.primaryTrack}
+                    onChange={(event) => setFormValues((prev) => ({ ...prev, primaryTrack: event.target.value }))}
+                  >
+                    <option value="">Choose your main track</option>
+                    {tracks.map((track) => (
+                      <option key={track.value} value={track.value}>
+                        {track.name}
+                      </option>
+                    ))}
+                  </Select>
                 </Field>
                 <Field label="Second track (optional)">
-                  <Select name="secondaryTrack"><option value="">No second preference</option>{secondaryOptions.map((track) => <option key={track.value} value={track.value}>{track.name}</option>)}</Select>
+                  <Select
+                    name="secondaryTrack"
+                    value={formValues.secondaryTrack}
+                    onChange={(event) => setFormValues((prev) => ({ ...prev, secondaryTrack: event.target.value }))}
+                  >
+                    <option value="">No second preference</option>
+                    {secondaryOptions.map((track) => (
+                      <option key={track.value} value={track.value}>
+                        {track.name}
+                      </option>
+                    ))}
+                  </Select>
                 </Field>
-                <div className="sm:col-span-2"><Field label="Portfolio or GitHub (optional)"><Input name="portfolioUrl" type="url" placeholder="https://" maxLength={500} /></Field></div>
-                <div className="sm:col-span-2"><Field label="Why do you want to join Spark?"><Textarea name="motivation" required minLength={20} maxLength={800} placeholder="Tell us what you want to learn, build, or contribute…" /></Field></div>
+                <div className="sm:col-span-2">
+                  <Field label="Portfolio or GitHub (optional)">
+                    <Input
+                      name="portfolioUrl"
+                      type="url"
+                      placeholder="https://"
+                      defaultValue={formValues.portfolioUrl}
+                      maxLength={500}
+                    />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Why do you want to join Spark?">
+                    <Textarea
+                      name="motivation"
+                      required
+                      minLength={20}
+                      maxLength={800}
+                      defaultValue={formValues.motivation}
+                      placeholder="Tell us what you want to learn, build, or contribute…"
+                    />
+                  </Field>
+                </div>
               </div>
-              <label className="mt-5 flex items-start gap-3 text-sm"><input name="consent" type="checkbox" required className="mt-1 size-4 accent-primary" /><span>I confirm that I am a first-year student at IIIT Bhopal and the information above is accurate.</span></label>
-              {error && <p className="mt-4 border border-destructive bg-destructive/10 p-3 text-sm text-destructive" role="alert">{error}</p>}
-              <Button type="submit" variant="electric" size="lg" disabled={submitting} className="mt-6 w-full">{submitting ? "Submitting…" : "Submit registration"}<ArrowRight /></Button>
-              <p className="mt-3 text-center text-xs text-muted-foreground">Your response is stored securely and shared only with the Spark recruitment team.</p>
+              <label className="mt-5 flex items-start gap-3 text-sm">
+                <input
+                  name="consent"
+                  type="checkbox"
+                  defaultChecked={true}
+                  required
+                  className="mt-1 size-4 accent-primary"
+                />
+                <span>I confirm that I am a first-year student at IIIT Bhopal and the information above is accurate.</span>
+              </label>
+              {error && (
+                <p className="mt-4 border border-destructive bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+                  {error}
+                </p>
+              )}
+              <Button type="submit" variant="electric" size="lg" disabled={submitting} className="mt-6 w-full">
+                {submitting
+                  ? isEditing
+                    ? "Updating application…"
+                    : "Submitting…"
+                  : isEditing
+                    ? "Save & update application"
+                    : "Submit registration"}
+                <ArrowRight />
+              </Button>
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                Your response is stored securely and shared only with the Spark recruitment team.
+              </p>
             </form>
           )}
         </div>

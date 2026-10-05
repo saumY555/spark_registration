@@ -31,38 +31,41 @@ export function isValidScholarNumber(val: string): boolean {
   return scholarNumberRegex.test(val.trim());
 }
 
-const registrationSchema = z
-  .object({
-    fullName: z.string().trim().min(2, "Please enter your full name.").max(100),
-    email: z
-      .string()
-      .trim()
-      .max(255)
-      .refine((val) => emailRegex.test(val), {
-        message: "Please enter a valid email address (e.g. name@example.com).",
-      }),
-    phone: z
-      .string()
-      .trim()
-      .refine((val) => isValid10DigitPhone(val), {
-        message: "Please enter a valid 10-digit mobile number (e.g. 9876543210 or +91 9876543210).",
-      }),
-    scholarNumber: z
-      .string()
-      .trim()
-      .refine((val) => isValidScholarNumber(val), {
-        message: "Please enter a valid scholar number (e.g. 25U010061 or 25P02F1028).",
-      }),
-    primaryTrack: z.enum(tracks),
-    secondaryTrack: z.enum(tracks).optional(),
-    portfolioUrl: z.union([z.literal(""), z.string().trim().url().max(500)]).optional(),
-    motivation: z.string().trim().min(20, "Motivation must be at least 20 characters.").max(800),
-    consent: z.literal(true),
-  })
-  .refine((data) => data.primaryTrack !== data.secondaryTrack, {
+const baseRegistrationSchema = z.object({
+  fullName: z.string().trim().min(2, "Please enter your full name.").max(100),
+  email: z
+    .string()
+    .trim()
+    .max(255)
+    .refine((val) => emailRegex.test(val), {
+      message: "Please enter a valid email address (e.g. name@example.com).",
+    }),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => isValid10DigitPhone(val), {
+      message: "Please enter a valid 10-digit mobile number (e.g. 9876543210 or +91 9876543210).",
+    }),
+  scholarNumber: z
+    .string()
+    .trim()
+    .refine((val) => isValidScholarNumber(val), {
+      message: "Please enter a valid scholar number (e.g. 25U010061 or 25P02F1028).",
+    }),
+  primaryTrack: z.enum(tracks),
+  secondaryTrack: z.enum(tracks).optional(),
+  portfolioUrl: z.union([z.literal(""), z.string().trim().url().max(500)]).optional(),
+  motivation: z.string().trim().min(20, "Motivation must be at least 20 characters.").max(800),
+  consent: z.literal(true),
+});
+
+const registrationSchema = baseRegistrationSchema.refine(
+  (data) => data.primaryTrack !== data.secondaryTrack,
+  {
     message: "Choose a different second track.",
     path: ["secondaryTrack"],
-  });
+  }
+);
 
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 
@@ -226,5 +229,89 @@ export const submitRegistration = createServerFn({ method: "POST" })
       registrationNo: regNo,
       candidateId: regNo,
       sheetSynced,
+    };
+  });
+
+const updateSchema = baseRegistrationSchema
+  .extend({
+    registrationNo: z.string().trim().min(3),
+  })
+  .refine((data) => data.primaryTrack !== data.secondaryTrack, {
+    message: "Choose a different second track.",
+    path: ["secondaryTrack"],
+  });
+
+export type UpdateRegistrationInput = z.infer<typeof updateSchema>;
+
+export const updateRegistration = createServerFn({ method: "POST" })
+  .validator((input: UpdateRegistrationInput) => updateSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const updatePayload = {
+      full_name: data.fullName,
+      scholar_number: data.scholarNumber.toUpperCase(),
+      institute_email: data.email.toLowerCase(),
+      phone_number: data.phone,
+      primary_track: data.primaryTrack,
+      secondary_track: data.secondaryTrack ?? null,
+      portfolio_url: data.portfolioUrl || null,
+      motivation: data.motivation,
+      first_year_confirmed: data.consent,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: updatedApp, error } = await supabaseAdmin
+      .from("applications")
+      .update(updatePayload)
+      .eq("registration_no", data.registrationNo)
+      .select("id, registration_no, created_at, updated_at")
+      .single();
+
+    if (error || !updatedApp) {
+      handleSupabaseError(error);
+    }
+
+    let sheetSynced = false;
+    const webhookUrl =
+      process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
+      process.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] ||
+      (typeof import.meta !== "undefined" && import.meta.env
+        ? (import.meta.env["GOOGLE_SHEETS_WEBHOOK_URL"] as string) ||
+          (import.meta.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] as string)
+        : undefined);
+
+    if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          redirect: "follow",
+          body: JSON.stringify({
+            created_at: updatedApp.updated_at || new Date().toISOString(),
+            registration_no: data.registrationNo,
+            full_name: data.fullName,
+            scholar_number: data.scholarNumber.toUpperCase(),
+            institute_email: data.email.toLowerCase(),
+            phone_number: data.phone,
+            primary_track: data.primaryTrack,
+            secondary_track: data.secondaryTrack ?? "",
+            portfolio_url: data.portfolioUrl ?? "",
+            motivation: data.motivation,
+            first_year_confirmed: "Yes",
+            status: "updated",
+          }),
+        });
+        if (response.ok) sheetSynced = true;
+      } catch (e) {
+        console.warn("Google Sheets update sync error:", e);
+      }
+    }
+
+    return {
+      registrationNo: data.registrationNo,
+      candidateId: data.registrationNo,
+      sheetSynced,
+      isUpdated: true,
     };
   });
