@@ -19,9 +19,10 @@ let sfxRaf = 0;
 let sfxActiveCard: HTMLElement | null = null;
 let sfxActiveConn: HTMLElement | null = null;
 let sfxCleanupListeners: (() => void) | null = null;
+let sfxSafetyTimer: number | null = null;
 
 const sfxAn = (el: Element, kf: Keyframe[] | PropertyIndexedKeyframes, o?: KeyframeAnimationOptions) =>
-  el.animate(kf, { fill: 'both', easing: SFX_EO, ...o });
+  el.animate(kf, { fill: 'backwards', easing: SFX_EO, ...o });
 
 const sfxMk = (s: string) =>
   [...s]
@@ -49,7 +50,7 @@ function sfxCreateOverlay(regNo: string): HTMLElement {
   ci.className = 'sfx-ci';
 
   ci.innerHTML = `
-    <div class="sfx-top sfx-up" data-d="850">
+    <div class="sfx-top sfx-up" data-d="560">
       <span class="sfx-k">SPARK 26–27 TEAM</span>
       <span class="sfx-chip" id="sfx-chip">${regNo}</span>
     </div>
@@ -57,10 +58,10 @@ function sfxCreateOverlay(regNo: string): HTMLElement {
       <span class="sfx-l1" id="sfx-l1"></span>
       <span class="sfx-l2" id="sfx-l2"></span>
     </h1>
-    <p class="sfx-sub sfx-up" data-d="1100">You're officially part of SPARK 26–27.</p>
-    <p class="sfx-lab sfx-up" data-d="1250">Stay connected. Follow the journey.</p>
+    <p class="sfx-sub sfx-up" data-d="680">You're officially part of SPARK 26–27.</p>
+    <p class="sfx-lab sfx-up" data-d="760">Stay connected. Follow the journey.</p>
     <div id="sfx-rows"></div>
-    <div class="sfx-ft sfx-up" data-d="2000">
+    <div class="sfx-ft sfx-up" data-d="1120">
       <span>Your response is saved. Keep your registration number.</span>
     </div>
   `;
@@ -83,7 +84,7 @@ function sfxCreateOverlay(regNo: string): HTMLElement {
   if (rows) {
     rows.innerHTML = SFX_LINKS.map(
       (l, i) =>
-        `<a class="sfx-row sfx-up" data-d="${1400 + i * 180}" href="${l.u}" target="_blank" rel="noopener"><i class="sfx-rule" data-d="${1400 + i * 180}"></i><span>${l.n}<small>${l.d}</small></span><span class="sfx-ar">→</span></a>`
+        `<a class="sfx-row sfx-up" data-d="${820 + i * 90}" href="${l.u}" target="_blank" rel="noopener"><i class="sfx-rule" data-d="${820 + i * 90}"></i><span>${l.n}<small>${l.d}</small></span><span class="sfx-ar">→</span></a>`
     ).join('');
 
     rows.querySelectorAll('.sfx-row').forEach(row => {
@@ -150,12 +151,10 @@ function sfxFuse(card: HTMLElement): Promise<SVGElement> {
     const a = R('var(--sfx-dark, #07061A)', 7);
     const b = R('var(--sfx-blue, #2F5BFF)', 3.5);
     const dot = document.createElementNS(SFX_NS, 'circle');
-    dot.setAttribute('r', '7');
+    dot.setAttribute('r', '6');
     dot.setAttribute('fill', 'var(--sfx-dark, #07061A)');
     dot.setAttribute('stroke', 'var(--sfx-blue, #2F5BFF)');
-    dot.setAttribute('stroke-width', '3');
-    dot.setAttribute('cx', String(rx + 3));
-    dot.setAttribute('cy', '3');
+    dot.setAttribute('stroke-width', '2.5');
     svg.append(dot);
 
     card.classList.add('sfx-charge');
@@ -170,14 +169,13 @@ function sfxFuse(card: HTMLElement): Promise<SVGElement> {
         dot.setAttribute('cy', String(pt0.y));
       }
     } catch {
-      // Fallback perimeter calculation
+      // Fallback
     }
 
     const t0 = performance.now();
-    const fuseDuration = 1000; // 1 second smooth fuse trace
 
     function tick(now: number) {
-      const p = Math.min(1, (now - t0) / fuseDuration);
+      const p = Math.min(1, (now - t0) / 450);
       const q = 1 - (1 - p) * (1 - p);
       a.setAttribute('stroke-dashoffset', String(1 - q));
       b.setAttribute('stroke-dashoffset', String(1 - q));
@@ -244,26 +242,19 @@ function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
     top: `${T}px`,
     width: `${W}px`,
     height: `${H}px`,
-    filter: 'drop-shadow(0 0 14px var(--sfx-glow, #FF3D9A))',
+    filter: 'drop-shadow(0 0 8px #2F5BFF) drop-shadow(0 0 18px #2F5BFF)',
   });
   bolt.innerHTML =
-    '<polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="var(--sfx-blue, #2F5BFF)" stroke-width="9" vector-effect="non-scaling-stroke"/><polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="#FFFFFF" stroke-width="2.5" vector-effect="non-scaling-stroke"/>';
+    '<polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="10" vector-effect="non-scaling-stroke"/><polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="#FFFFFF" stroke-width="3" vector-effect="non-scaling-stroke"/>';
   document.body.append(bolt);
 
-  bolt.animate(
-    [
-      { opacity: 0 },
-      { opacity: 1, offset: 0.2 },
-      { opacity: 1, offset: 0.6 },
-      { opacity: 0 }
-    ],
-    { duration: 550, fill: 'forwards' }
-  ).onfinish = () => bolt.remove();
+  bolt.animate([{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }).onfinish =
+    () => bolt.remove();
 
   (
     [
-      [lc, -70, -4],
-      [rc, 70, 4],
+      [lc, -64, -3],
+      [rc, 64, 3],
     ] as const
   ).forEach(([c, x, r]) => {
     c.animate(
@@ -271,7 +262,7 @@ function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
         { transform: 'none', opacity: 1 },
         { transform: `translateX(${x}%) rotate(${r}deg)`, opacity: 0 },
       ],
-      { duration: 650, delay: 120, easing: SFX_EV, fill: 'forwards' }
+      { duration: 360, delay: 70, easing: SFX_EV, fill: 'forwards' }
     ).onfinish = () => c.remove();
   });
 
@@ -282,33 +273,33 @@ function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
   conn.style.visibility = 'visible';
 
   sfxAn(conn, [{ clipPath: 'inset(0 50% 0 50%)' }, { clipPath: 'inset(0 0 0 0)' }], {
-    duration: 600,
-    delay: 80,
+    duration: 340,
+    delay: 20,
     easing: 'cubic-bezier(.3,0,.1,1)',
   });
 
   const dk = conn.querySelector('.sfx-dk');
   if (dk) {
-    sfxAn(dk, [{ opacity: 0 }, { opacity: 1 }], { duration: 450, delay: 350, easing: 'linear' });
+    sfxAn(dk, [{ opacity: 0 }, { opacity: 1 }], { duration: 280, delay: 200, easing: 'linear' });
   }
 
   conn.querySelectorAll('.sfx-ch').forEach((e, i) =>
-    sfxAn(e, [{ transform: 'translateY(108%)' }, { transform: 'none' }], { duration: 650, delay: 550 + i * 38 })
+    sfxAn(e, [{ transform: 'translateY(108%)' }, { transform: 'none' }], { duration: 520, delay: 300 + i * 26 })
   );
 
   const bg = conn.querySelector('.sfx-bg');
   if (bg) {
-    sfxAn(bg, [{ color: '#fff', transform: 'scale(1.22)' }, { color: 'var(--sfx-blue, #2F5BFF)', transform: 'none' }], {
-      duration: 400,
-      delay: 550 + 2 * 38 + 550,
+    sfxAn(bg, [{ color: '#fff', transform: 'scale(1.18)' }, { color: 'var(--sfx-blue, #2F5BFF)', transform: 'none' }], {
+      duration: 280,
+      delay: 300 + 2 * 26 + 430,
       easing: 'ease-out',
     });
   }
 
   conn.querySelectorAll('.sfx-up').forEach(e => {
     const el = e as HTMLElement;
-    sfxAn(el, [{ opacity: 0, transform: 'translateY(22px)' }, { opacity: 1, transform: 'none' }], {
-      duration: 600,
+    sfxAn(el, [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }], {
+      duration: 480,
       delay: Number(el.dataset.d) || 0,
     });
   });
@@ -316,25 +307,17 @@ function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
   conn.querySelectorAll('.sfx-rule').forEach(e => {
     const el = e as HTMLElement;
     sfxAn(el, [{ transform: 'scaleX(0)' }, { transform: 'none' }], {
-      duration: 650,
-      delay: (Number(el.dataset.d) || 0) + 100,
+      duration: 520,
+      delay: (Number(el.dataset.d) || 0) + 80,
     });
   });
-
-  setTimeout(() => {
-    if (sfxPlaying) {
-      sfxPlaying = false;
-      card.style.display = 'none';
-      if (sfxCleanupListeners) {
-        sfxCleanupListeners();
-        sfxCleanupListeners = null;
-      }
-    }
-  }, 3200);
 }
 
-export function sfxSkip() {
-  if (!sfxPlaying && !sfxActiveConn) return;
+function sfxForceFinalState() {
+  if (sfxSafetyTimer) {
+    clearTimeout(sfxSafetyTimer);
+    sfxSafetyTimer = null;
+  }
   sfxPlaying = false;
   cancelAnimationFrame(sfxRaf);
 
@@ -368,6 +351,11 @@ export function sfxSkip() {
   }
 }
 
+export function sfxSkip() {
+  if (!sfxPlaying && !sfxActiveConn) return;
+  sfxForceFinalState();
+}
+
 /**
  * Main trigger function called after existing Save Response succeeds.
  */
@@ -389,7 +377,12 @@ export async function sfxPlayFuseAndStrike(cardEl: HTMLElement, regNo: string) {
 
   sfxPlaying = true;
 
-  // Setup Skip listeners after 400ms debounce so the trigger click doesn't immediately skip
+  // Safety timer: 2200ms after Save is clicked, force the final state
+  sfxSafetyTimer = window.setTimeout(() => {
+    sfxForceFinalState();
+  }, 2200);
+
+  // Setup Skip listeners after 250ms debounce so trigger click does not skip
   const skipTimeout = setTimeout(() => {
     if (!sfxPlaying) return;
     const onPointerDown = (e: PointerEvent) => {
@@ -409,19 +402,21 @@ export async function sfxPlayFuseAndStrike(cardEl: HTMLElement, regNo: string) {
       document.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, 400);
+  }, 250);
 
+  const prevCleanup = sfxCleanupListeners;
   sfxCleanupListeners = () => {
     clearTimeout(skipTimeout);
+    if (prevCleanup) prevCleanup();
   };
 
   try {
-    const [svg] = await Promise.all([sfxFuse(cardEl), new Promise<void>(r => setTimeout(r, 600))]);
+    const [svg] = await Promise.all([sfxFuse(cardEl), new Promise<void>(r => setTimeout(r, 300))]);
     if (sfxPlaying) {
       sfxStrike(cardEl, regNo, svg);
     }
   } catch (err) {
     console.error('[SFX Error]', err);
-    sfxSkip();
+    sfxForceFinalState();
   }
 }

@@ -9,7 +9,6 @@
   --sfx-blue: #2F5BFF;
   --sfx-blue-lt: #6F93FF;
   --sfx-violet: #7A2BFF;
-  --sfx-glow: #FF3D9A;
   --sfx-white: #FFFFFF;
 }
 
@@ -33,28 +32,31 @@
 .sfx-clone {
   pointer-events: none;
   margin: 0;
-  z-index: 9998;
+  z-index: 2147482998;
 }
 
 .sfx-bolt {
   position: fixed;
   overflow: visible;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 2147482999;
 }
 
 .sfx-conn {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 2147483000;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--sfx-blue);
+  background: var(--sfx-dark);
   color: #fff;
   padding: 32px 20px;
   padding-top: max(32px, env(safe-area-inset-top, 0px));
   padding-bottom: max(32px, env(safe-area-inset-bottom, 0px));
+  margin: 0;
   box-sizing: border-box;
   font-family: 'Barlow', Helvetica, Arial, sans-serif;
   overflow-y: auto;
@@ -63,7 +65,8 @@
 .sfx-dk {
   position: absolute;
   inset: 0;
-  background: var(--sfx-dark);
+  background: radial-gradient(60% 50% at 50% 40%, rgba(122, 43, 255, 0.35), transparent 70%), var(--sfx-dark);
+  pointer-events: none;
 }
 
 .sfx-ci {
