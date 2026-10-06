@@ -1,6 +1,6 @@
 /**
  * SPARK 26–27 · Fuse & Strike Animation Engine
- * Source of truth: SPARK Stage Visual Identity layout
+ * Source of truth: "SPARK 26–27 · Fuse & Strike prototype.html"
  * All classes, ids, functions and variables are namespaced with sfx-
  */
 
@@ -9,33 +9,9 @@ const SFX_EV = 'cubic-bezier(.7,0,.2,1)';
 const SFX_EO = 'cubic-bezier(.2,.8,.2,1)';
 
 export const SFX_LINKS = [
-  {
-    id: 'ig',
-    n: 'INSTAGRAM',
-    d: 'See it first',
-    u: 'https://www.instagram.com/spark_iiitbhopal/',
-    cls: 'sfx-card-ig',
-    iconCls: 'sfx-brand-icon-ig',
-    svg: '<svg class="sfx-brand-icon sfx-brand-icon-ig" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>',
-  },
-  {
-    id: 'li',
-    n: 'LINKEDIN',
-    d: 'Build with us',
-    u: 'https://www.linkedin.com/company/spark-iiit-bhopal/',
-    cls: 'sfx-card-li',
-    iconCls: 'sfx-brand-icon-li',
-    svg: '<svg class="sfx-brand-icon sfx-brand-icon-li" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.78a1.62 1.62 0 1 0 0 3.24 1.62 1.62 0 0 0 0-3.24z"/></svg>',
-  },
-  {
-    id: 'wa',
-    n: 'WHATSAPP',
-    d: 'Where the plans happen',
-    u: 'https://chat.whatsapp.com/invite/spark-2026-firstyears',
-    cls: 'sfx-card-wa',
-    iconCls: 'sfx-brand-icon-wa',
-    svg: '<svg class="sfx-brand-icon sfx-brand-icon-wa" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24m4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.03-1.25-.75-.67-1.26-1.5-1.41-1.75-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.08 0 1.23.89 2.42 1.02 2.59.13.17 1.76 2.69 4.27 3.77.6.26 1.06.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.11-.23-.17-.48-.29z"/></svg>',
-  },
+  { n: 'Instagram', d: 'See it first', u: 'https://www.instagram.com/spark_iiitbhopal/' },
+  { n: 'LinkedIn', d: 'Build with us', u: 'https://www.linkedin.com/company/spark-iiit-bhopal/' },
+  { n: 'WhatsApp', d: 'Where the plans happen', u: 'https://chat.whatsapp.com/invite/spark-2026-firstyears' }
 ] as const;
 
 let playing = false;
@@ -46,7 +22,7 @@ function esc(t: string) {
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#39;',
+    "'": '&#39;'
   }[c] || c));
 }
 
@@ -63,41 +39,33 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
   el.hidden = true;
   el.setAttribute('aria-live', 'polite');
 
-  const cardsHtml = links
+  const rows = links
     .map((l, i) => {
       const d = 820 + i * 90;
       return (
-        '<a class="sfx-card-link ' +
-        l.cls +
-        ' sfx-up" data-d="' +
+        '<a class="sfx-row sfx-up" data-d="' +
         d +
         '" href="' +
         esc(l.u) +
         '" target="_blank" rel="noopener">' +
-        '<div class="sfx-card-body">' +
-        '<h3>' +
+        '<i class="sfx-rule" data-d="' +
+        d +
+        '"></i>' +
+        '<span>' +
         esc(l.n) +
-        '</h3>' +
-        '<p>' +
+        '<small>' +
         esc(l.d) +
-        '</p>' +
-        '</div>' +
-        '<div class="sfx-card-action">' +
-        l.svg +
-        '<span class="sfx-card-arrow">\u2192</span>' +
-        '</div>' +
-        '</a>'
+        '</small></span><span class="sfx-ar">\u2192</span></a>'
       );
     })
     .join('');
 
   el.innerHTML =
+    '<div class="sfx-dk"></div>' +
     '<div class="sfx-ci">' +
-    '<div class="sfx-top sfx-up" data-d="520">' +
-    '<span class="sfx-k">SPARK 26\u201327 TEAM</span>' +
+    '<div class="sfx-top sfx-up" data-d="560"><span class="sfx-k">SPARK 26\u201327 TEAM</span>' +
     (reg ? '<span class="sfx-chip">' + esc(reg) + '</span>' : '') +
     '</div>' +
-    '<div class="sfx-eyebrow sfx-up" data-d="560">YOU ARE OFFICIALLY IN!</div>' +
     '<div class="sfx-hl" role="heading" aria-level="1">' +
     '<span class="sfx-l1">' +
     mk('FEEL THE') +
@@ -105,20 +73,31 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
     '<span class="sfx-l2">' +
     mk('SP') +
     '<span class="sfx-m"><span class="sfx-ch"><svg class="sfx-bg" viewBox="0 0 24 32" aria-label="A">' +
-    '<polygon points="15,0 2,18 11,18 8,32 22,12 13,12" fill="currentColor"/></svg></span></span>' +
-    mk('RK.') +
+    '<polygon points="15,0 2,18 11,18 8,32 22,12 13,12" fill="#ffd23f" stroke="#ff2d8f" stroke-width="2.5" stroke-linejoin="round"/></svg></span></span>' +
+    mk('RK') +
+    '<span class="sfx-m"><span class="sfx-ch sfx-dot">.</span></span>' +
     '</span>' +
     '</div>' +
     '<p class="sfx-sub sfx-up" data-d="680">You\u2019re officially part of SPARK 26\u201327.</p>' +
-    '<div class="sfx-sec-head sfx-up" data-d="760">' +
-    '<span class="sfx-sec-title">STAY CONNECTED. FOLLOW THE JOURNEY.</span>' +
-    '<div class="sfx-sec-line"></div>' +
-    '</div>' +
-    '<div class="sfx-cards">' +
-    cardsHtml +
+    '<p class="sfx-lab sfx-up" data-d="760">Stay connected. Follow the journey.</p>' +
+    '<div class="sfx-rows">' +
+    rows +
     '</div>' +
     '<div class="sfx-ft sfx-up" data-d="1120">Your response is saved. Keep your registration number.</div>' +
     '</div>';
+
+  el.querySelectorAll<HTMLElement>('.sfx-row').forEach(r => {
+    const a = r.querySelector<HTMLElement>('.sfx-ar');
+    if (!a) return;
+    r.addEventListener('pointermove', e => {
+      const b = r.getBoundingClientRect();
+      a.style.transform =
+        'translate(' + ((e.clientX - b.left) / b.width) * 16 + 'px,' + (e.clientY - b.top - b.height / 2) / 6 + 'px)';
+    });
+    r.addEventListener('pointerleave', () => {
+      a.style.transform = '';
+    });
+  });
 
   return el;
 }
@@ -233,11 +212,11 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
       }
 
       const a = R('#07061A', 7);
-      const b = R('#38BDF8', 3.5);
+      const b = R('#2F5BFF', 3.5);
       const dot = document.createElementNS(SFX_NS, 'circle');
       dot.setAttribute('r', '6');
       dot.setAttribute('fill', '#07061A');
-      dot.setAttribute('stroke', '#38BDF8');
+      dot.setAttribute('stroke', '#2F5BFF');
       dot.setAttribute('stroke-width', '2.5');
       svg.appendChild(dot);
       card.appendChild(svg);
@@ -308,7 +287,7 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     const rc = clone('polygon(50% 0,100% 0,100% 100%,50% 100%,45% 75%,56% 52%,44% 30%)');
     card.style.visibility = 'hidden';
 
-    // Measure exact geometric landing coordinates inside the overlay
+    // Show overlay immediately to compute exact geometric landing coordinates
     conn.hidden = false;
     conn.removeAttribute('hidden');
     conn.style.display = 'flex';
@@ -332,8 +311,8 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     const cdx = cr.left + cr.width / 2 - (fl + fw / 2);
     const cdy = cr.top + cr.height / 2 - (ft + fh / 2);
 
-    const GLOW = 'drop-shadow(0 0 10px #38BDF8) drop-shadow(0 0 28px #38BDF8)';
-    const NOGLOW = 'drop-shadow(0 0 0 rgba(56,189,248,0)) drop-shadow(0 0 0 rgba(56,189,248,0))';
+    const GLOW = 'drop-shadow(0 0 10px #2F5BFF) drop-shadow(0 0 26px #2F5BFF)';
+    const NOGLOW = 'drop-shadow(0 0 0 rgba(47,91,255,0)) drop-shadow(0 0 0 rgba(47,91,255,0))';
     const P = '15,0 2,18 11,18 8,32 22,12 13,12';
 
     const fly = document.createElementNS(SFX_NS, 'svg') as unknown as SVGElement;
@@ -353,7 +332,7 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     fly.innerHTML =
       '<polygon class="o" points="' +
       P +
-      '" fill="#38BDF8" stroke="#38BDF8" stroke-width="4" stroke-linejoin="round"/>' +
+      '" fill="#ffd23f" stroke="#ff2d8f" stroke-width="5" stroke-linejoin="round"/>' +
       '<polygon class="f" points="' +
       P +
       '" fill="#FFFFFF" stroke="none"/>';
@@ -363,7 +342,7 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
 
     const T0 = 'translate(' + cdx + 'px,' + cdy + 'px)';
 
-    // Seamless, fluid continuous flight trajectory into letter 'A'
+    // Seamless, fluid continuous flight trajectory from card directly into the letter "A"
     const flyAnim = fly.animate(
       [
         { opacity: 0, transform: T0 + ' scale(' + sc * 0.25 + ')', offset: 0, easing: 'ease-out' },
@@ -374,12 +353,12 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
       { duration: 920, fill: 'forwards' }
     );
 
-    // Color morph to electric cyan 'A'
+    // Smooth color and glow morph into the yellow/pink "A"
     const morph: KeyframeAnimationOptions = { duration: 640, delay: 280, fill: 'forwards', easing: 'ease-in-out' };
     const polyF = fly.querySelector('.f');
     const polyO = fly.querySelector('.o');
-    if (polyF) polyF.animate([{ fill: '#FFFFFF' }, { fill: '#38BDF8' }], morph);
-    if (polyO) polyO.animate([{ strokeWidth: '4' }, { strokeWidth: '0' }], morph);
+    if (polyF) polyF.animate([{ fill: '#FFFFFF' }, { fill: '#ffd23f' }], morph);
+    if (polyO) polyO.animate([{ strokeWidth: '5' }, { strokeWidth: '2.5' }], morph);
     fly.animate([{ filter: GLOW }, { filter: NOGLOW }], morph);
 
     flyAnim.onfinish = () => {
@@ -403,16 +382,16 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
       );
     });
 
-    // Overlay opens from center
+    // Overlay smoothly opens from center
     an(conn, [{ clipPath: 'inset(0 50% 0 50%)' }, { clipPath: 'inset(0 0 0 0)' }], {
       duration: 340,
       delay: 200,
       easing: 'cubic-bezier(.3,0,.1,1)',
     });
 
-    // Kinetic typography stagger
+    // Kinetic typography and rows stagger
     conn.querySelectorAll('.sfx-ch').forEach((e, i) => {
-      if (e.querySelector('.sfx-bg')) return;
+      if (e.querySelector('.sfx-bg')) return; // The flying thunderbolt docks into this slot
       an(e, [{ transform: 'translateY(108%)' }, { transform: 'none' }], { duration: 520, delay: 280 + i * 26 });
     });
 
@@ -421,6 +400,14 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
       an(el, [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }], {
         duration: 480,
         delay: +(el.dataset.d || 0),
+      });
+    });
+
+    conn.querySelectorAll('.sfx-rule').forEach(e => {
+      const el = e as HTMLElement;
+      an(el, [{ transform: 'scaleX(0)' }, { transform: 'none' }], {
+        duration: 520,
+        delay: +(el.dataset.d || 0) + 80,
       });
     });
 
