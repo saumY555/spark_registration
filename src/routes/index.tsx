@@ -4,6 +4,7 @@ import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, Tr
 import { useMemo, useState, useEffect, type FormEvent } from "react";
 
 import sparkPoster from "@/assets/spark-poster.jpg";
+import { SparkConfirmationFlipCard } from "@/components/SparkConfirmationFlipCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -332,67 +333,24 @@ function Index() {
           </div>
 
           {result ? (
-            <div className="self-start border-2 border-foreground bg-card p-6 shadow-[10px_10px_0_var(--secondary)] sm:p-8" role="status">
-              <div className="mb-6 grid size-14 place-items-center bg-secondary"><Check className="size-8" /></div>
-              <p className="text-xs font-extrabold uppercase text-primary">
-                {result.isUpdated ? "Application updated" : "Registration complete"}
-              </p>
-              <h3 className="mt-2 font-display text-4xl uppercase sm:text-5xl">
-                {result.isUpdated ? "Changes saved." : "You’re in."}
-              </h3>
-              <p className="mt-4 text-sm text-muted-foreground sm:text-base">
-                {result.isUpdated
-                  ? "Your updated application has been saved to the database and synced with the organizers."
-                  : "Save your registration number. The Spark team will use your email for event updates."}
-              </p>
-              
-              <div className="mt-6 space-y-4 border border-foreground bg-background p-5">
-                <div className="border-b border-foreground/10 pb-3">
-                  <span className="text-xs font-bold uppercase text-muted-foreground">Registration Number</span>
-                  <p className="mt-1 text-2xl font-extrabold text-primary">{result.registrationNo || result.candidateId}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
-                  <div>
-                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Candidate Name</span>
-                    <p className="font-bold">{formValues.fullName || "—"}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Scholar Number</span>
-                    <p className="font-bold uppercase">{formValues.scholarNumber || "—"}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Email</span>
-                    <p className="font-semibold break-all">{formValues.email || "—"}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Phone</span>
-                    <p className="font-semibold">{formValues.phone || "—"}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase font-bold text-[10px]">Primary Track</span>
-                    <p className="font-bold text-primary">{formValues.primaryTrack || "—"}</p>
-                  </div>
-                  {formValues.secondaryTrack && (
-                    <div>
-                      <span className="text-muted-foreground uppercase font-bold text-[10px]">Second Track</span>
-                      <p className="font-semibold">{formValues.secondaryTrack}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button type="button" variant="electric" onClick={handleEditClick}>
-                  <Edit3 className="mr-1 size-4" /> Edit your response
-                </Button>
-                <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
-                  <RotateCcw className="mr-1 size-4" /> Submit another application
-                </Button>
-              </div>
-              {!result.sheetSynced && (
-                <p className="mt-4 text-xs text-muted-foreground">Your application is safely stored in the database.</p>
-              )}
+            <div className="self-start w-full">
+              <SparkConfirmationFlipCard
+                data={{
+                  registrationNo: result.registrationNo || result.candidateId || registeredNo || "",
+                  fullName: formValues.fullName,
+                  scholarNumber: formValues.scholarNumber,
+                  email: formValues.email,
+                  phone: formValues.phone,
+                  primaryTrack: formValues.primaryTrack,
+                  secondaryTrack: formValues.secondaryTrack,
+                  portfolioUrl: formValues.portfolioUrl,
+                  motivation: formValues.motivation,
+                  isUpdated: result.isUpdated,
+                  sheetSynced: result.sheetSynced,
+                }}
+                onEdit={handleEditClick}
+                onNewApplication={handleNewApplicationClick}
+              />
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">
