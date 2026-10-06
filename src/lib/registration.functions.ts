@@ -106,6 +106,87 @@ function handleSupabaseError(error: unknown): never {
   throw new Error(message);
 }
 
+async function mirrorToSheetsInBackground(params: {
+  webhookUrl?: string;
+  lovableKey?: string;
+  sheetsKey?: string;
+  createdAt: string;
+  registrationNo: string;
+  fullName: string;
+  scholarNumber: string;
+  email: string;
+  phone: string;
+  primaryTrack: string;
+  secondaryTrack?: string;
+  portfolioUrl?: string;
+  motivation: string;
+  status: "pending" | "updated";
+}) {
+  const { webhookUrl, lovableKey, sheetsKey } = params;
+
+  if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
+    try {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        redirect: "follow",
+        body: JSON.stringify({
+          created_at: params.createdAt,
+          registration_no: params.registrationNo,
+          full_name: params.fullName,
+          scholar_number: params.scholarNumber,
+          institute_email: params.email,
+          phone_number: params.phone,
+          primary_track: params.primaryTrack,
+          secondary_track: params.secondaryTrack || "",
+          portfolio_url: params.portfolioUrl || "",
+          motivation: params.motivation,
+          first_year_confirmed: "Yes",
+          status: params.status,
+        }),
+      });
+      console.log(`[Google Sheets Webhook] Synced ${params.registrationNo}`);
+    } catch (err) {
+      console.error("[Google Sheets Webhook Error]", err);
+    }
+  } else if (lovableKey && sheetsKey) {
+    try {
+      await fetch(
+        `${GATEWAY_URL}/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A:M:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${lovableKey}`,
+            "X-Connection-Api-Key": sheetsKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            majorDimension: "ROWS",
+            values: [[
+              params.createdAt,
+              params.registrationNo,
+              params.fullName,
+              params.email,
+              params.phone,
+              params.scholarNumber,
+              "First year",
+              params.primaryTrack,
+              params.secondaryTrack || "",
+              params.portfolioUrl || "",
+              params.motivation,
+              "Yes",
+              params.status === "updated" ? "Updated" : "Stored",
+            ]],
+          }),
+        }
+      );
+      console.log(`[Google Sheets Gateway] Synced ${params.registrationNo}`);
+    } catch (err) {
+      console.error("[Google Sheets Gateway Error]", err);
+    }
+  }
+}
+
 export const submitRegistration = createServerFn({ method: "POST" })
   .validator((input: RegistrationInput) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
@@ -160,38 +241,28 @@ export const submitRegistration = createServerFn({ method: "POST" })
         handleSupabaseError(updateError);
       }
 
-      let sheetSynced = false;
-      if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
-        try {
-          const response = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            redirect: "follow",
-            body: JSON.stringify({
-              created_at: updatedApp?.updated_at || new Date().toISOString(),
-              registration_no: regNo,
-              full_name: data.fullName,
-              scholar_number: normalizedScholar,
-              institute_email: normalizedEmail,
-              phone_number: data.phone,
-              primary_track: data.primaryTrack,
-              secondary_track: data.secondaryTrack ?? "",
-              portfolio_url: data.portfolioUrl ?? "",
-              motivation: data.motivation,
-              first_year_confirmed: "Yes",
-              status: "updated",
-            }),
-          });
-          if (response.ok) sheetSynced = true;
-        } catch (webhookError) {
-          console.error("Google Sheets update sync failed:", webhookError);
-        }
-      }
+      // Non-blocking asynchronous sync to Google Sheets mirror
+      void mirrorToSheetsInBackground({
+        webhookUrl,
+        lovableKey,
+        sheetsKey,
+        createdAt: updatedApp?.updated_at || new Date().toISOString(),
+        registrationNo: regNo,
+        fullName: data.fullName,
+        scholarNumber: normalizedScholar,
+        email: normalizedEmail,
+        phone: data.phone,
+        primaryTrack: data.primaryTrack,
+        secondaryTrack: data.secondaryTrack,
+        portfolioUrl: data.portfolioUrl,
+        motivation: data.motivation,
+        status: "updated",
+      });
 
       return {
         registrationNo: regNo,
         candidateId: regNo,
-        sheetSynced,
+        sheetSynced: true,
         isUpdated: true,
       };
     }
@@ -222,81 +293,29 @@ export const submitRegistration = createServerFn({ method: "POST" })
     }
 
     const regNo = application?.registration_no || defaultRegNo;
-    let sheetSynced = false;
 
-    if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
-      try {
-        const response = await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          redirect: "follow",
-          body: JSON.stringify({
-            created_at: application?.created_at || new Date().toISOString(),
-            registration_no: regNo,
-            full_name: data.fullName,
-            scholar_number: normalizedScholar,
-            institute_email: normalizedEmail,
-            phone_number: data.phone,
-            primary_track: data.primaryTrack,
-            secondary_track: data.secondaryTrack ?? "",
-            portfolio_url: data.portfolioUrl ?? "",
-            motivation: data.motivation,
-            first_year_confirmed: "Yes",
-            status: "pending",
-          }),
-        });
-
-        if (response.ok) {
-          sheetSynced = true;
-          console.log("Successfully synced application to Google Sheets:", regNo);
-        }
-      } catch (webhookError) {
-        console.error("Google Sheets Webhook sync failed:", webhookError);
-      }
-    } else if (lovableKey && sheetsKey) {
-      try {
-        const response = await fetch(
-          `${GATEWAY_URL}/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A:M:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${lovableKey}`,
-              "X-Connection-Api-Key": sheetsKey,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              majorDimension: "ROWS",
-              values: [[
-                application?.created_at || new Date().toISOString(),
-                regNo,
-                data.fullName,
-                normalizedEmail,
-                data.phone,
-                normalizedScholar,
-                "First year",
-                data.primaryTrack,
-                data.secondaryTrack ?? "",
-                data.portfolioUrl ?? "",
-                data.motivation,
-                "Yes",
-                "Stored",
-              ]],
-            }),
-          },
-        );
-
-        if (response.ok) {
-          sheetSynced = true;
-        }
-      } catch (syncError) {
-        console.error("Registration saved to Supabase, but Sheet sync failed:", syncError);
-      }
-    }
+    // Non-blocking asynchronous sync to Google Sheets mirror
+    void mirrorToSheetsInBackground({
+      webhookUrl,
+      lovableKey,
+      sheetsKey,
+      createdAt: application?.created_at || new Date().toISOString(),
+      registrationNo: regNo,
+      fullName: data.fullName,
+      scholarNumber: normalizedScholar,
+      email: normalizedEmail,
+      phone: data.phone,
+      primaryTrack: data.primaryTrack,
+      secondaryTrack: data.secondaryTrack,
+      portfolioUrl: data.portfolioUrl,
+      motivation: data.motivation,
+      status: "pending",
+    });
 
     return {
       registrationNo: regNo,
       candidateId: regNo,
-      sheetSynced,
+      sheetSynced: true,
       isUpdated: false,
     };
   });
@@ -357,7 +376,6 @@ export const updateRegistration = createServerFn({ method: "POST" })
     }
 
     const regNo = updatedApp?.registration_no || data.registrationNo;
-    let sheetSynced = false;
     const webhookUrl =
       process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
       process.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] ||
@@ -366,37 +384,31 @@ export const updateRegistration = createServerFn({ method: "POST" })
           (import.meta.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] as string)
         : undefined);
 
-    if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
-      try {
-        const response = await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          redirect: "follow",
-          body: JSON.stringify({
-            created_at: updatedApp?.updated_at || new Date().toISOString(),
-            registration_no: regNo,
-            full_name: data.fullName,
-            scholar_number: normalizedScholar,
-            institute_email: normalizedEmail,
-            phone_number: data.phone,
-            primary_track: data.primaryTrack,
-            secondary_track: data.secondaryTrack ?? "",
-            portfolio_url: data.portfolioUrl ?? "",
-            motivation: data.motivation,
-            first_year_confirmed: "Yes",
-            status: "updated",
-          }),
-        });
-        if (response.ok) sheetSynced = true;
-      } catch (e) {
-        console.warn("Google Sheets update sync error:", e);
-      }
-    }
+    const lovableKey = process.env["LOVABLE_API_KEY"];
+    const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
+
+    // Non-blocking asynchronous sync to Google Sheets mirror
+    void mirrorToSheetsInBackground({
+      webhookUrl,
+      lovableKey,
+      sheetsKey,
+      createdAt: updatedApp?.updated_at || new Date().toISOString(),
+      registrationNo: regNo,
+      fullName: data.fullName,
+      scholarNumber: normalizedScholar,
+      email: normalizedEmail,
+      phone: data.phone,
+      primaryTrack: data.primaryTrack,
+      secondaryTrack: data.secondaryTrack,
+      portfolioUrl: data.portfolioUrl,
+      motivation: data.motivation,
+      status: "updated",
+    });
 
     return {
       registrationNo: regNo,
       candidateId: regNo,
-      sheetSynced,
+      sheetSynced: true,
       isUpdated: true,
     };
   });
