@@ -123,6 +123,10 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
   if (!card || playing || document.querySelector('.sfx-conn')) return;
   playing = true;
 
+  // Prevent background page bounce/scrolling while overlay is active
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
   const conn = buildOverlay(regNo, SFX_LINKS);
   document.body.appendChild(conn);
 
@@ -162,6 +166,8 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     conn.hidden = false;
     conn.style.display = 'flex';
     conn.style.visibility = 'visible';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
     document.removeEventListener('pointerdown', skip, true);
     document.removeEventListener('keydown', onKey, true);
   }
@@ -266,11 +272,7 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
 
   /* ---------- 2. STRIKE & SMOOTH THUNDERBOLT FLIGHT ---------- */
   function strike() {
-    const parent = card.parentNode;
-    const L = card.offsetLeft;
-    const T = card.offsetTop;
-    const W = card.offsetWidth;
-    const H = card.offsetHeight;
+    const cr = card.getBoundingClientRect();
     cleanupTemp();
 
     function clone(clip: string) {
@@ -281,17 +283,18 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
       });
       c.classList.add('sfx-clone');
       Object.assign(c.style, {
-        position: 'absolute',
-        left: L + 'px',
-        top: T + 'px',
-        width: W + 'px',
-        height: H + 'px',
+        position: 'fixed',
+        left: cr.left + 'px',
+        top: cr.top + 'px',
+        width: cr.width + 'px',
+        height: cr.height + 'px',
         clipPath: clip,
         margin: '0',
         display: '',
         visibility: 'visible',
+        zIndex: '2147482998',
       });
-      if (parent) parent.appendChild(c);
+      document.body.appendChild(c);
       temp.push(c);
       return c;
     }
@@ -305,6 +308,7 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     conn.removeAttribute('hidden');
     conn.style.display = 'flex';
     conn.style.visibility = 'visible';
+    conn.scrollTop = 0;
 
     const aEl = conn.querySelector<SVGElement>('.sfx-bg');
     if (!aEl) {
@@ -313,7 +317,6 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     }
 
     const ar = aEl.getBoundingClientRect();
-    const cr = card.getBoundingClientRect();
     const u = ar.width / 24;
     const fw = 30 * u;
     const fh = 38 * u;

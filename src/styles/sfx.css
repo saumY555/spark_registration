@@ -46,22 +46,30 @@
 
 .sfx-conn {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100vw;
+  height: 100vh;
   height: 100dvh;
   z-index: 2147483000;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   background: linear-gradient(180deg, #2a0f7a 0%, #5b21d6 35%, #9a2bc4 65%, #c81e78 100%);
+  background-attachment: fixed;
   color: #fff;
-  padding: 32px 20px;
-  padding-top: max(32px, env(safe-area-inset-top, 0px));
-  padding-bottom: max(32px, env(safe-area-inset-bottom, 0px));
+  padding: 24px 18px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
   margin: 0;
   box-sizing: border-box;
   font-family: 'Barlow', Helvetica, Arial, sans-serif;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sfx-dk {
@@ -75,14 +83,16 @@
   position: relative;
   width: min(560px, 100%);
   z-index: 1;
-  margin: auto;
+  margin: auto 0;
+  padding: 6px 0;
+  box-sizing: border-box;
 }
 
 .sfx-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .sfx-k {
@@ -110,7 +120,7 @@
 .sfx-l1 {
   display: block;
   font-family: 'Anton', Impact, sans-serif;
-  font-size: clamp(38px, 9vw, 72px);
+  font-size: clamp(32px, 8.5vw, 72px);
   color: #ffffff;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -119,7 +129,7 @@
 .sfx-l2 {
   display: block;
   font-family: 'Anton', Impact, sans-serif;
-  font-size: clamp(96px, 22vw, 190px);
+  font-size: clamp(76px, 19vw, 190px);
   line-height: 0.95;
   color: #ffffff;
   text-shadow: 6px 6px 0 #ff2d8f;
@@ -276,4 +286,53 @@
   font-size: 14px;
   color: #E8E6DE;
   font-family: 'Barlow', sans-serif;
+}
+
+@media (max-width: 480px) {
+  .sfx-conn {
+    padding: 18px 14px;
+    padding-top: max(16px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .sfx-top {
+    margin-bottom: 12px;
+  }
+
+  .sfx-hl {
+    margin: 0 0 10px;
+  }
+
+  .sfx-l2 {
+    text-shadow: 4px 4px 0 #ff2d8f;
+  }
+
+  .sfx-dot {
+    text-shadow: 4px 4px 0 #ff2d8f;
+  }
+
+  .sfx-sub {
+    margin: 0 0 16px;
+    font-size: 16px;
+  }
+
+  .sfx-lab {
+    margin: 0 0 4px;
+    font-size: 14px;
+  }
+
+  .sfx-row {
+    padding: 14px 8px;
+    font-size: clamp(26px, 7.5vw, 36px);
+  }
+
+  .sfx-row small {
+    font-size: 13px;
+    margin-top: 2px;
+  }
+
+  .sfx-ft {
+    margin-top: 14px;
+    font-size: 13px;
+  }
 }
