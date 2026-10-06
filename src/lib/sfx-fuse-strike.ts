@@ -9,9 +9,9 @@ const SFX_EV = 'cubic-bezier(.7,0,.2,1)';
 const SFX_EO = 'cubic-bezier(.2,.8,.2,1)';
 
 export const SFX_LINKS = [
-  { n: 'Instagram', d: 'See it first', u: 'https://www.instagram.com/spark_iiitbhopal/' },
-  { n: 'LinkedIn', d: 'Build with us', u: 'https://www.linkedin.com/company/spark-iiit-bhopal/' },
-  { n: 'WhatsApp', d: 'Where the plans happen', u: 'https://chat.whatsapp.com/invite/spark-2026-firstyears' }
+  { n: 'Instagram', d: 'See it first', u: 'https://www.instagram.com/spark_iiitb?stkn=ejR5eDJ6ZWlsa2to' },
+  { n: 'LinkedIn', d: 'Build with us', u: 'https://www.linkedin.com/company/spark-iiitb/' },
+  { n: 'WhatsApp', d: 'Where the plans happen', u: 'https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr' }
 ] as const;
 
 let playing = false;
