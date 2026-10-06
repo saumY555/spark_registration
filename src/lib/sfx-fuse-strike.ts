@@ -91,7 +91,7 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
     '<span class="sfx-m"><span class="sfx-ch sfx-dot">.</span></span>' +
     '</span>' +
     '</div>' +
-    '<p class="sfx-sub sfx-up" data-d="680">You\u2019re officially part of SPARK 26\u201327.</p>' +
+    '<p class="sfx-sub sfx-up" data-d="680">Prove yourself and be the part of SPARK 26\u201327.</p>' +
     '<p class="sfx-lab sfx-up" data-d="760">Stay connected. Follow the journey.</p>' +
     '<div class="sfx-rows">' +
     rows +
