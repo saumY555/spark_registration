@@ -32,6 +32,15 @@ function mk(s: string) {
     .join('');
 }
 
+const SFX_ICONS: Record<string, string> = {
+  Instagram:
+    '<svg class="sfx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5.5" ry="5.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
+  LinkedIn:
+    '<svg class="sfx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5.5" ry="5.5"/><path d="M7.5 10.5v6" stroke-width="2.2"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/><path d="M11.5 16.5v-6h3a2.5 2.5 0 0 1 2.5 2.5v3.5" stroke-width="2.2"/></svg>',
+  WhatsApp:
+    '<svg class="sfx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.5 8.5 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/><path d="M9.8 9.2c-.2-.4-.4-.4-.7-.4h-.6c-.2 0-.5.1-.7.3-.8.8-.8 2.1 0 3.3 1.2 1.8 2.8 3 4.8 3.6 1.3.4 2.2.1 2.8-.5.3-.3.4-.6.4-.9v-.5c0-.2-.1-.4-.3-.5l-1.3-.6c-.2-.1-.4-.1-.6.1l-.5.6c-.1.1-.3.2-.5.1-.9-.4-1.8-1.1-2.4-1.9-.1-.2-.1-.3 0-.5l.4-.5c.1-.2.2-.4.1-.6l-.6-1.5z" fill="currentColor" stroke="none"/></svg>',
+};
+
 function buildOverlay(reg: string, links: typeof SFX_LINKS) {
   const el = document.createElement('div');
   el.className = 'sfx-conn';
@@ -42,6 +51,7 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
   const rows = links
     .map((l, i) => {
       const d = 820 + i * 90;
+      const iconSvg = SFX_ICONS[l.n] || '';
       return (
         '<a class="sfx-row sfx-up" data-d="' +
         d +
@@ -51,11 +61,14 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
         '<i class="sfx-rule" data-d="' +
         d +
         '"></i>' +
-        '<span>' +
+        '<span class="sfx-row-left">' +
+        iconSvg +
+        '<span class="sfx-row-text">' +
         esc(l.n) +
         '<small>' +
         esc(l.d) +
-        '</small></span><span class="sfx-ar">\u2192</span></a>'
+        '</small></span>' +
+        '</span><span class="sfx-ar">\u2192</span></a>'
       );
     })
     .join('');

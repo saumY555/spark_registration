@@ -208,6 +208,32 @@
   transform: scaleY(1);
 }
 
+.sfx-row-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+  transition: color 0.2s;
+}
+
+.sfx-row-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sfx-ico {
+  width: clamp(30px, 6vw, 38px);
+  height: clamp(30px, 6vw, 38px);
+  flex-shrink: 0;
+  display: block;
+}
+
+.sfx-row:hover .sfx-row-left,
+.sfx-row:focus-visible .sfx-row-left {
+  color: var(--sfx-white);
+}
+
 .sfx-row > span {
   position: relative;
   z-index: 1;
