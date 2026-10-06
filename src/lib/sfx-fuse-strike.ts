@@ -21,7 +21,7 @@ let sfxActiveConn: HTMLElement | null = null;
 let sfxCleanupListeners: (() => void) | null = null;
 
 const sfxAn = (el: Element, kf: Keyframe[] | PropertyIndexedKeyframes, o?: KeyframeAnimationOptions) =>
-  el.animate(kf, { fill: 'backwards', easing: SFX_EO, ...o });
+  el.animate(kf, { fill: 'both', easing: SFX_EO, ...o });
 
 const sfxMk = (s: string) =>
   [...s]
@@ -39,7 +39,7 @@ function sfxCreateOverlay(regNo: string): HTMLElement {
   conn = document.createElement('section');
   conn.id = 'sfx-conn';
   conn.className = 'sfx-conn';
-  conn.hidden = true;
+  conn.style.display = 'none';
   conn.setAttribute('aria-live', 'polite');
 
   const dk = document.createElement('div');
@@ -154,17 +154,24 @@ function sfxFuse(card: HTMLElement): Promise<SVGElement> {
     dot.setAttribute('fill', 'var(--sfx-dark, #07061A)');
     dot.setAttribute('stroke', 'var(--sfx-blue, #2F5BFF)');
     dot.setAttribute('stroke-width', '3');
-
-    const len = b.getTotalLength ? b.getTotalLength() : (w + h) * 2;
-    if (b.getPointAtLength) {
-      const pt0 = b.getPointAtLength(0);
-      dot.setAttribute('cx', String(pt0.x));
-      dot.setAttribute('cy', String(pt0.y));
-    }
+    dot.setAttribute('cx', String(rx + 3));
+    dot.setAttribute('cy', '3');
     svg.append(dot);
 
     card.classList.add('sfx-charge');
     card.append(svg);
+
+    let len = (w + h) * 2;
+    try {
+      if (b.getTotalLength) {
+        len = b.getTotalLength();
+        const pt0 = b.getPointAtLength(0);
+        dot.setAttribute('cx', String(pt0.x));
+        dot.setAttribute('cy', String(pt0.y));
+      }
+    } catch {
+      // Fallback perimeter calculation
+    }
 
     const t0 = performance.now();
     const fuseDuration = 1000; // 1 second smooth fuse trace
@@ -174,10 +181,14 @@ function sfxFuse(card: HTMLElement): Promise<SVGElement> {
       const q = 1 - (1 - p) * (1 - p);
       a.setAttribute('stroke-dashoffset', String(1 - q));
       b.setAttribute('stroke-dashoffset', String(1 - q));
-      if (b.getPointAtLength) {
-        const pt = b.getPointAtLength(q * len);
-        dot.setAttribute('cx', String(pt.x));
-        dot.setAttribute('cy', String(pt.y));
+      try {
+        if (b.getPointAtLength) {
+          const pt = b.getPointAtLength(q * len);
+          dot.setAttribute('cx', String(pt.x));
+          dot.setAttribute('cy', String(pt.y));
+        }
+      } catch {
+        // Fallback
       }
       if (p < 1) {
         sfxRaf = requestAnimationFrame(tick);
@@ -233,7 +244,7 @@ function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
     top: `${T}px`,
     width: `${W}px`,
     height: `${H}px`,
-    filter: 'drop-shadow(0 0 12px var(--sfx-glow, #FF3D9A))',
+    filter: 'drop-shadow(0 0 14px var(--sfx-glow, #FF3D9A))',
   });
   bolt.innerHTML =
     '<polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="var(--sfx-blue, #2F5BFF)" stroke-width="9" vector-effect="non-scaling-stroke"/><polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="#FFFFFF" stroke-width="2.5" vector-effect="non-scaling-stroke"/>';
@@ -266,7 +277,9 @@ function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
 
   const conn = sfxCreateOverlay(regNo);
   sfxActiveConn = conn;
-  conn.hidden = false;
+  conn.removeAttribute('hidden');
+  conn.style.display = 'flex';
+  conn.style.visibility = 'visible';
 
   sfxAn(conn, [{ clipPath: 'inset(0 50% 0 50%)' }, { clipPath: 'inset(0 0 0 0)' }], {
     duration: 600,
@@ -334,8 +347,10 @@ export function sfxSkip() {
   }
 
   if (sfxActiveConn) {
-    sfxActiveConn.hidden = false;
-    sfxActiveConn.style.clipPath = 'inset(0 0 0 0)';
+    sfxActiveConn.removeAttribute('hidden');
+    sfxActiveConn.style.display = 'flex';
+    sfxActiveConn.style.visibility = 'visible';
+    sfxActiveConn.style.clipPath = 'none';
     const dk = sfxActiveConn.querySelector('.sfx-dk') as HTMLElement | null;
     if (dk) dk.style.opacity = '1';
     sfxActiveConn.querySelectorAll<HTMLElement>('.sfx-ch, .sfx-up, .sfx-rule, .sfx-bg').forEach(el => {
@@ -361,12 +376,14 @@ export async function sfxPlayFuseAndStrike(cardEl: HTMLElement, regNo: string) {
 
   const RM = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   sfxActiveCard = cardEl;
+  const conn = sfxCreateOverlay(regNo);
+  sfxActiveConn = conn;
 
   if (RM) {
     cardEl.style.display = 'none';
-    const conn = sfxCreateOverlay(regNo);
-    conn.hidden = false;
-    sfxActiveConn = conn;
+    conn.removeAttribute('hidden');
+    conn.style.display = 'flex';
+    conn.style.visibility = 'visible';
     return;
   }
 
