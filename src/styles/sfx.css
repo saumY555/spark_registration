@@ -1,0 +1,237 @@
+/* =========================================================================
+   SPARK 26–27 · Fuse & Strike Animation Styles
+   Source of Truth: "SPARK 26–27 · Fuse & Strike prototype.html"
+   All properties, classes and variables are prefixed with sfx-
+   ========================================================================= */
+
+:root {
+  --sfx-dark: #07061A;
+  --sfx-blue: #2F5BFF;
+  --sfx-blue-lt: #6F93FF;
+  --sfx-violet: #7A2BFF;
+  --sfx-glow: #FF3D9A;
+  --sfx-white: #FFFFFF;
+}
+
+.sfx-charge > *:not(.sfx-fz) {
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+
+.sfx-fz {
+  position: absolute;
+  left: -1.5px;
+  top: -1.5px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.sfx-clone {
+  pointer-events: none;
+  margin: 0;
+  z-index: 9998;
+}
+
+.sfx-bolt {
+  position: fixed;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.sfx-conn {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sfx-blue);
+  color: #fff;
+  padding: 32px 20px;
+  padding-top: max(32px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(32px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  font-family: 'Barlow', Helvetica, Arial, sans-serif;
+  overflow-y: auto;
+}
+
+.sfx-dk {
+  position: absolute;
+  inset: 0;
+  background: var(--sfx-dark);
+}
+
+.sfx-ci {
+  position: relative;
+  width: min(560px, 100%);
+  z-index: 1;
+  margin: auto;
+}
+
+.sfx-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.sfx-k {
+  font: 500 15px 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
+  letter-spacing: 0.08em;
+  color: #A8A8A0;
+  text-transform: uppercase;
+}
+
+.sfx-chip {
+  background: var(--sfx-violet);
+  color: #fff;
+  font: 800 17px 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+.sfx-hl {
+  font: 800 1em / 0.9 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
+  text-transform: uppercase;
+  margin: 0 0 14px;
+}
+
+.sfx-l1 {
+  display: block;
+  font-size: clamp(36px, 10vw, 64px);
+  color: #fff;
+  line-height: 0.95;
+}
+
+.sfx-l2 {
+  display: block;
+  font-size: clamp(88px, 26vw, 160px);
+  line-height: 0.84;
+  color: var(--sfx-blue);
+}
+
+.sfx-m {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding: 0.04em 0 0.02em;
+}
+
+.sfx-ch {
+  display: inline-block;
+}
+
+.sfx-sp {
+  display: inline-block;
+  width: 0.28em;
+}
+
+.sfx-bg {
+  height: 0.76em;
+  width: auto;
+  display: block;
+  margin: 0.06em 0.03em 0;
+}
+
+.sfx-sub {
+  margin: 0 0 26px;
+  font-size: 18px;
+  color: #E8E6DE;
+  font-family: 'Barlow', sans-serif;
+}
+
+.sfx-lab {
+  margin: 0 0 6px;
+  font: 500 15px 'Barlow Condensed', sans-serif;
+  letter-spacing: 0.08em;
+  color: var(--sfx-blue-lt);
+  text-transform: uppercase;
+}
+
+#sfx-rows {
+  border-bottom: 2px solid rgba(47, 91, 255, 0.35);
+}
+
+.sfx-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 12px;
+  color: #fff;
+  text-decoration: none;
+  font: 800 clamp(30px, 8vw, 42px) / 1 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+
+.sfx-row small {
+  display: block;
+  margin-top: 4px;
+  font: 400 15px 'Barlow', sans-serif;
+  text-transform: none;
+  opacity: 0.7;
+}
+
+.sfx-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--sfx-blue);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sfx-row:hover::after,
+.sfx-row:focus-visible::after {
+  transform: scaleY(1);
+}
+
+.sfx-row > span {
+  position: relative;
+  z-index: 1;
+  transition: color 0.2s;
+}
+
+.sfx-row:hover > span,
+.sfx-row:focus-visible > span {
+  color: var(--sfx-white);
+}
+
+.sfx-ar {
+  font-size: 1.1em;
+  transition: transform 0.15s;
+  position: relative;
+  z-index: 1;
+}
+
+.sfx-row:hover .sfx-ar,
+.sfx-row:focus-visible .sfx-ar {
+  color: var(--sfx-white);
+}
+
+.sfx-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--sfx-blue);
+  transform-origin: left;
+  z-index: 2;
+}
+
+.sfx-ft {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  font-size: 14px;
+  color: #A8A8A0;
+  font-family: 'Barlow', sans-serif;
+}

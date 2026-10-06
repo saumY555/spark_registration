@@ -1,0 +1,376 @@
+/**
+ * SPARK 26–27 · Fuse & Strike Animation Engine
+ * Source of truth: "SPARK 26–27 · Fuse & Strike prototype.html"
+ * All classes, ids, functions and variables are namespaced with sfx-
+ */
+
+const SFX_NS = 'http://www.w3.org/2000/svg';
+const SFX_EV = 'cubic-bezier(.7,0,.2,1)';
+const SFX_EO = 'cubic-bezier(.2,.8,.2,1)';
+
+export const SFX_LINKS = [
+  { n: 'Instagram', d: 'See it first', u: 'https://www.instagram.com/spark_iiitbhopal/' },
+  { n: 'LinkedIn', d: 'Build with us', u: 'https://www.linkedin.com/company/spark-iiit-bhopal/' },
+  { n: 'WhatsApp', d: 'Where the plans happen', u: 'https://chat.whatsapp.com/invite/spark-2026-firstyears' }
+] as const;
+
+let sfxPlaying = false;
+let sfxRaf = 0;
+let sfxActiveCard: HTMLElement | null = null;
+let sfxActiveConn: HTMLElement | null = null;
+let sfxCleanupListeners: (() => void) | null = null;
+
+const sfxAn = (el: Element, kf: Keyframe[] | PropertyIndexedKeyframes, o?: KeyframeAnimationOptions) =>
+  el.animate(kf, { fill: 'backwards', easing: SFX_EO, ...o });
+
+const sfxMk = (s: string) =>
+  [...s]
+    .map(c => (c === ' ' ? '<span class="sfx-sp"></span>' : `<span class="sfx-m"><span class="sfx-ch">${c}</span></span>`))
+    .join('');
+
+function sfxCreateOverlay(regNo: string): HTMLElement {
+  let conn = document.getElementById('sfx-conn');
+  if (conn) {
+    const chip = conn.querySelector('#sfx-chip');
+    if (chip) chip.textContent = regNo;
+    return conn;
+  }
+
+  conn = document.createElement('section');
+  conn.id = 'sfx-conn';
+  conn.className = 'sfx-conn';
+  conn.hidden = true;
+  conn.setAttribute('aria-live', 'polite');
+
+  const dk = document.createElement('div');
+  dk.className = 'sfx-dk';
+
+  const ci = document.createElement('div');
+  ci.className = 'sfx-ci';
+
+  ci.innerHTML = `
+    <div class="sfx-top sfx-up" data-d="560">
+      <span class="sfx-k">SPARK 26–27 TEAM</span>
+      <span class="sfx-chip" id="sfx-chip">${regNo}</span>
+    </div>
+    <h1 class="sfx-hl">
+      <span class="sfx-l1" id="sfx-l1"></span>
+      <span class="sfx-l2" id="sfx-l2"></span>
+    </h1>
+    <p class="sfx-sub sfx-up" data-d="680">You're officially part of SPARK 26–27.</p>
+    <p class="sfx-lab sfx-up" data-d="760">Stay connected. Follow the journey.</p>
+    <div id="sfx-rows"></div>
+    <div class="sfx-ft sfx-up" data-d="1120">
+      <span>Your response is saved. Keep your registration number.</span>
+    </div>
+  `;
+
+  conn.append(dk, ci);
+  document.body.append(conn);
+
+  const l1 = ci.querySelector('#sfx-l1');
+  const l2 = ci.querySelector('#sfx-l2');
+  const rows = ci.querySelector('#sfx-rows');
+
+  if (l1) l1.innerHTML = sfxMk('FEEL THE');
+  if (l2) {
+    l2.innerHTML =
+      sfxMk('SP') +
+      '<span class="sfx-m"><span class="sfx-ch"><svg class="sfx-bg" viewBox="0 0 24 32" aria-label="A"><polygon points="15,0 2,18 11,18 8,32 22,12 13,12" fill="currentColor"/></svg></span></span>' +
+      sfxMk('RK.');
+  }
+
+  if (rows) {
+    rows.innerHTML = SFX_LINKS.map(
+      (l, i) =>
+        `<a class="sfx-row sfx-up" data-d="${820 + i * 90}" href="${l.u}" target="_blank" rel="noopener"><i class="sfx-rule" data-d="${820 + i * 90}"></i><span>${l.n}<small>${l.d}</small></span><span class="sfx-ar">→</span></a>`
+    ).join('');
+
+    rows.querySelectorAll('.sfx-row').forEach(row => {
+      const r = row as HTMLElement;
+      const a = r.querySelector('.sfx-ar') as HTMLElement | null;
+      if (!a) return;
+      r.addEventListener('pointermove', e => {
+        const b = r.getBoundingClientRect();
+        a.style.transform = `translate(${((e.clientX - b.left) / b.width) * 16}px,${((e.clientY - b.top - b.height / 2) / 6)}px)`;
+      });
+      r.addEventListener('pointerleave', () => {
+        a.style.transform = '';
+      });
+    });
+  }
+
+  return conn;
+}
+
+function sfxFuse(card: HTMLElement): Promise<SVGElement> {
+  return new Promise(resolve => {
+    const w = card.offsetWidth;
+    const h = card.offsetHeight;
+    const computed = window.getComputedStyle(card);
+    const rx = parseFloat(computed.borderRadius) || 8;
+
+    const svg = document.createElementNS(SFX_NS, 'svg') as unknown as SVGElement;
+    svg.setAttribute('class', 'sfx-fz');
+    svg.setAttribute('width', String(w));
+    svg.setAttribute('height', String(h));
+
+    const R = (c: string, sw: number) => {
+      const r = document.createElementNS(SFX_NS, 'rect');
+      (
+        [
+          ['width', w],
+          ['height', h],
+          ['rx', rx],
+          ['fill', 'none'],
+          ['stroke', c],
+          ['stroke-width', sw],
+          ['pathLength', 1],
+          ['stroke-dasharray', '1 1'],
+          ['stroke-dashoffset', 1],
+        ] as const
+      ).forEach(([k, v]) => r.setAttribute(k, String(v)));
+      svg.append(r);
+      return r;
+    };
+
+    const a = R('var(--sfx-dark, #07061A)', 7);
+    const b = R('var(--sfx-blue, #2F5BFF)', 3.5);
+    const dot = document.createElementNS(SFX_NS, 'circle');
+    dot.setAttribute('r', '6');
+    dot.setAttribute('fill', 'var(--sfx-dark, #07061A)');
+    dot.setAttribute('stroke', 'var(--sfx-blue, #2F5BFF)');
+    dot.setAttribute('stroke-width', '2.5');
+    svg.append(dot);
+
+    card.classList.add('sfx-charge');
+    card.append(svg);
+
+    const len = b.getTotalLength ? b.getTotalLength() : (w + h) * 2;
+    const t0 = performance.now();
+
+    function tick(now: number) {
+      const p = Math.min(1, (now - t0) / 450);
+      const q = 1 - (1 - p) * (1 - p);
+      a.setAttribute('stroke-dashoffset', String(1 - q));
+      b.setAttribute('stroke-dashoffset', String(1 - q));
+      if (b.getPointAtLength) {
+        const pt = b.getPointAtLength(q * len);
+        dot.setAttribute('cx', String(pt.x));
+        dot.setAttribute('cy', String(pt.y));
+      }
+      if (p < 1) {
+        sfxRaf = requestAnimationFrame(tick);
+      } else {
+        resolve(svg);
+      }
+    }
+
+    sfxRaf = requestAnimationFrame(tick);
+  });
+}
+
+function sfxStrike(card: HTMLElement, regNo: string, svg: SVGElement) {
+  const cr = card.getBoundingClientRect();
+  const L = cr.left;
+  const T = cr.top;
+  const W = cr.width;
+  const H = cr.height;
+
+  svg.remove();
+  card.classList.remove('sfx-charge');
+
+  const clone = (clip: string) => {
+    const c = card.cloneNode(true) as HTMLElement;
+    c.removeAttribute('id');
+    c.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+    c.classList.add('sfx-clone');
+    Object.assign(c.style, {
+      position: 'fixed',
+      left: `${L}px`,
+      top: `${T}px`,
+      width: `${W}px`,
+      height: `${H}px`,
+      clipPath: clip,
+      margin: '0',
+      boxSizing: 'border-box',
+    });
+    document.body.append(c);
+    return c;
+  };
+
+  const lc = clone('polygon(0 0,50% 0,44% 30%,56% 52%,45% 75%,50% 100%,0 100%)');
+  const rc = clone('polygon(50% 0,100% 0,100% 100%,50% 100%,45% 75%,56% 52%,44% 30%)');
+
+  card.style.visibility = 'hidden';
+
+  const bolt = document.createElementNS(SFX_NS, 'svg') as unknown as SVGElement;
+  bolt.setAttribute('class', 'sfx-bolt');
+  bolt.setAttribute('viewBox', '0 0 100 100');
+  bolt.setAttribute('preserveAspectRatio', 'none');
+  Object.assign(bolt.style, {
+    left: `${L}px`,
+    top: `${T}px`,
+    width: `${W}px`,
+    height: `${H}px`,
+    filter: 'drop-shadow(0 0 10px var(--sfx-glow, #FF3D9A))',
+  });
+  bolt.innerHTML =
+    '<polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="var(--sfx-blue, #2F5BFF)" stroke-width="9" vector-effect="non-scaling-stroke"/><polyline points="50,-6 44,30 56,52 45,75 50,106" fill="none" stroke="#FFFFFF" stroke-width="2.5" vector-effect="non-scaling-stroke"/>';
+  document.body.append(bolt);
+
+  bolt.animate([{ opacity: 1 }, { opacity: 1, offset: 0.5 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }).onfinish =
+    () => bolt.remove();
+
+  (
+    [
+      [lc, -64, -3],
+      [rc, 64, 3],
+    ] as const
+  ).forEach(([c, x, r]) => {
+    c.animate(
+      [
+        { transform: 'none', opacity: 1 },
+        { transform: `translateX(${x}%) rotate(${r}deg)`, opacity: 0 },
+      ],
+      { duration: 360, delay: 70, easing: SFX_EV, fill: 'forwards' }
+    ).onfinish = () => c.remove();
+  });
+
+  const conn = sfxCreateOverlay(regNo);
+  sfxActiveConn = conn;
+  conn.hidden = false;
+
+  sfxAn(conn, [{ clipPath: 'inset(0 50% 0 50%)' }, { clipPath: 'inset(0 0 0 0)' }], {
+    duration: 340,
+    delay: 20,
+    easing: 'cubic-bezier(.3,0,.1,1)',
+  });
+
+  const dk = conn.querySelector('.sfx-dk');
+  if (dk) {
+    sfxAn(dk, [{ opacity: 0 }, { opacity: 1 }], { duration: 280, delay: 200, easing: 'linear' });
+  }
+
+  conn.querySelectorAll('.sfx-ch').forEach((e, i) =>
+    sfxAn(e, [{ transform: 'translateY(108%)' }, { transform: 'none' }], { duration: 520, delay: 300 + i * 26 })
+  );
+
+  const bg = conn.querySelector('.sfx-bg');
+  if (bg) {
+    sfxAn(bg, [{ color: '#fff', transform: 'scale(1.18)' }, { color: 'var(--sfx-blue, #2F5BFF)', transform: 'none' }], {
+      duration: 280,
+      delay: 300 + 2 * 26 + 430,
+      easing: 'ease-out',
+    });
+  }
+
+  conn.querySelectorAll('.sfx-up').forEach(e => {
+    const el = e as HTMLElement;
+    sfxAn(el, [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }], {
+      duration: 480,
+      delay: Number(el.dataset.d) || 0,
+    });
+  });
+
+  conn.querySelectorAll('.sfx-rule').forEach(e => {
+    const el = e as HTMLElement;
+    sfxAn(el, [{ transform: 'scaleX(0)' }, { transform: 'none' }], {
+      duration: 520,
+      delay: (Number(el.dataset.d) || 0) + 80,
+    });
+  });
+
+  setTimeout(() => {
+    if (sfxPlaying) {
+      sfxPlaying = false;
+      card.style.display = 'none';
+      if (sfxCleanupListeners) {
+        sfxCleanupListeners();
+        sfxCleanupListeners = null;
+      }
+    }
+  }, 1800);
+}
+
+export function sfxSkip() {
+  if (!sfxPlaying && !sfxActiveConn) return;
+  sfxPlaying = false;
+  cancelAnimationFrame(sfxRaf);
+
+  document.querySelectorAll('.sfx-clone, .sfx-bolt, .sfx-fz').forEach(e => e.remove());
+  document.body.getAnimations({ subtree: true }).forEach(a => a.cancel());
+
+  if (sfxActiveCard) {
+    sfxActiveCard.classList.remove('sfx-charge');
+    sfxActiveCard.style.display = 'none';
+  }
+
+  if (sfxActiveConn) {
+    sfxActiveConn.hidden = false;
+    sfxActiveConn.style.clipPath = 'inset(0 0 0 0)';
+    const dk = sfxActiveConn.querySelector('.sfx-dk') as HTMLElement | null;
+    if (dk) dk.style.opacity = '1';
+    sfxActiveConn.querySelectorAll<HTMLElement>('.sfx-ch, .sfx-up, .sfx-rule, .sfx-bg').forEach(el => {
+      el.style.transform = 'none';
+      el.style.opacity = '1';
+      if (el.classList.contains('sfx-bg')) {
+        el.style.color = 'var(--sfx-blue, #2F5BFF)';
+      }
+    });
+  }
+
+  if (sfxCleanupListeners) {
+    sfxCleanupListeners();
+    sfxCleanupListeners = null;
+  }
+}
+
+/**
+ * Main trigger function called after existing Save Response succeeds.
+ */
+export async function sfxPlayFuseAndStrike(cardEl: HTMLElement, regNo: string) {
+  if (sfxPlaying) return;
+
+  const RM = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  sfxActiveCard = cardEl;
+
+  if (RM) {
+    cardEl.style.display = 'none';
+    const conn = sfxCreateOverlay(regNo);
+    conn.hidden = false;
+    sfxActiveConn = conn;
+    return;
+  }
+
+  sfxPlaying = true;
+
+  // Setup Skip listeners
+  const onPointerDown = (e: PointerEvent) => {
+    // If clicking on a link inside overlay, let it navigate
+    if ((e.target as HTMLElement)?.closest?.('a')) return;
+    sfxSkip();
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') sfxSkip();
+  };
+
+  document.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('keydown', onKeyDown);
+
+  sfxCleanupListeners = () => {
+    document.removeEventListener('pointerdown', onPointerDown);
+    window.removeEventListener('keydown', onKeyDown);
+  };
+
+  try {
+    const [svg] = await Promise.all([sfxFuse(cardEl), new Promise<void>(r => setTimeout(r, 300))]);
+    if (sfxPlaying) {
+      sfxStrike(cardEl, regNo, svg);
+    }
+  } catch (err) {
+    console.error('[SFX Error]', err);
+    sfxSkip();
+  }
+}

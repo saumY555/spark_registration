@@ -1,6 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;800&family=Barlow:wght@400;500&display=swap');
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import "./styles/sfx.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -164,78 +166,5 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: no-preference) {
   .marquee-track { animation: marquee 24s linear infinite; }
   .spark-pulse { animation: spark-pulse 3s ease-in-out infinite; }
-}
-
-/* 3D Card Flip & Kinetic Animations */
-.perspective-1400 {
-  perspective: 1400px;
-}
-
-.transform-style-3d {
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
-}
-
-.backface-hidden {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.rotate-y-180 {
-  transform: rotateY(180deg);
-}
-
-.rotate-y-0 {
-  transform: rotateY(0deg);
-}
-
-@keyframes checkmark-draw {
-  0% {
-    stroke-dashoffset: 24;
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-}
-
-.animate-draw-check {
-  stroke-dasharray: 24;
-  stroke-dashoffset: 0;
-  animation: checkmark-draw 0.35s cubic-bezier(0.65, 0, 0.45, 1) forwards;
-}
-
-@keyframes energy-circuit {
-  0% {
-    offset-distance: 0%;
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    offset-distance: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes spark-glow-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.4)) drop-shadow(0 0 24px rgba(190, 242, 100, 0.2));
-  }
-  50% {
-    filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 35px rgba(56, 189, 248, 0.4));
-  }
-}
-
-.spark-thunderbolt-glow {
-  animation: spark-glow-pulse 2.5s ease-in-out infinite;
 }
 
