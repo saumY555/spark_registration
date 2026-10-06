@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, Trophy, Users } from "lucide-react";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
+import { FaInstagram, FaLinkedin, FaWhatsapp } from "react-icons/fa";
 
 import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
@@ -572,7 +573,43 @@ function Index() {
         </div>
       </section>
 
-      <footer className="border-t border-foreground/20 px-5 py-8 md:px-10"><div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row"><span>Spark Club · IIIT Bhopal</span><span>Society for Programming, Automation, Robotics and Knowledge</span></div></footer>
+      <footer className="border-t border-foreground/20 px-5 py-8 md:px-10">
+        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row">
+          <span>Spark Club · IIIT Bhopal</span>
+          <span>Society for Programming, Automation, Robotics and Knowledge</span>
+           <div className="flex items-center gap-5">
+          <a
+            href="https://www.instagram.com/spark_iiitb/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Instagram"
+            
+          >
+            <FaInstagram className="size-6" />
+          </a>
+
+          <a
+            href="https://www.linkedin.com/company/spark-iiitb/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn"
+
+          >
+            <FaLinkedin className="size-6" />
+          </a>
+
+          <a
+            href="https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Whatsapp"
+  
+          >
+            <FaWhatsapp className="size-6" />
+          </a>
+        </div>
+        </div>
+      </footer>
     </main>
   );
 }
