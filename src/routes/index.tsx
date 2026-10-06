@@ -343,7 +343,7 @@ function Index() {
           {result ? (
             <div
               id="sfx-card"
-              className="self-start border-2 border-foreground bg-card p-6 shadow-[10px_10px_0_var(--secondary)] sm:p-8"
+              className="relative self-start border-2 border-foreground bg-card p-6 shadow-[10px_10px_0_var(--secondary)] sm:p-8"
               role="status"
             >
               <div className="mb-6 grid size-14 place-items-center bg-secondary">

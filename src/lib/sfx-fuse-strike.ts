@@ -105,6 +105,7 @@ function sfxCreateOverlay(regNo: string): HTMLElement {
 
 function sfxFuse(card: HTMLElement): Promise<SVGElement> {
   return new Promise(resolve => {
+    card.style.position = 'relative';
     const w = card.offsetWidth;
     const h = card.offsetHeight;
     const computed = window.getComputedStyle(card);
@@ -114,14 +115,26 @@ function sfxFuse(card: HTMLElement): Promise<SVGElement> {
     svg.setAttribute('class', 'sfx-fz');
     svg.setAttribute('width', String(w));
     svg.setAttribute('height', String(h));
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    Object.assign(svg.style, {
+      position: 'absolute',
+      left: '0px',
+      top: '0px',
+      width: `${w}px`,
+      height: `${h}px`,
+      pointerEvents: 'none',
+      zIndex: '1000',
+    });
 
     const R = (c: string, sw: number) => {
       const r = document.createElementNS(SFX_NS, 'rect');
       (
         [
-          ['width', w],
-          ['height', h],
-          ['rx', rx],
+          ['x', sw / 2],
+          ['y', sw / 2],
+          ['width', Math.max(0, w - sw)],
+          ['height', Math.max(0, h - sw)],
+          ['rx', Math.max(0, rx)],
           ['fill', 'none'],
           ['stroke', c],
           ['stroke-width', sw],
@@ -137,16 +150,22 @@ function sfxFuse(card: HTMLElement): Promise<SVGElement> {
     const a = R('var(--sfx-dark, #07061A)', 7);
     const b = R('var(--sfx-blue, #2F5BFF)', 3.5);
     const dot = document.createElementNS(SFX_NS, 'circle');
-    dot.setAttribute('r', '6');
+    dot.setAttribute('r', '7');
     dot.setAttribute('fill', 'var(--sfx-dark, #07061A)');
     dot.setAttribute('stroke', 'var(--sfx-blue, #2F5BFF)');
-    dot.setAttribute('stroke-width', '2.5');
+    dot.setAttribute('stroke-width', '3');
+
+    const len = b.getTotalLength ? b.getTotalLength() : (w + h) * 2;
+    if (b.getPointAtLength) {
+      const pt0 = b.getPointAtLength(0);
+      dot.setAttribute('cx', String(pt0.x));
+      dot.setAttribute('cy', String(pt0.y));
+    }
     svg.append(dot);
 
     card.classList.add('sfx-charge');
     card.append(svg);
 
-    const len = b.getTotalLength ? b.getTotalLength() : (w + h) * 2;
     const t0 = performance.now();
     const fuseDuration = 1000; // 1 second smooth fuse trace
 
@@ -353,23 +372,30 @@ export async function sfxPlayFuseAndStrike(cardEl: HTMLElement, regNo: string) {
 
   sfxPlaying = true;
 
-  // Setup Skip listeners
-  const onPointerDown = (e: PointerEvent) => {
-    // If clicking on a link inside overlay, let it navigate
-    if ((e.target as HTMLElement)?.closest?.('a')) return;
-    sfxSkip();
-  };
+  // Setup Skip listeners after 400ms debounce so the trigger click doesn't immediately skip
+  const skipTimeout = setTimeout(() => {
+    if (!sfxPlaying) return;
+    const onPointerDown = (e: PointerEvent) => {
+      // If clicking on a link inside overlay, let it navigate
+      if ((e.target as HTMLElement)?.closest?.('a')) return;
+      sfxSkip();
+    };
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') sfxSkip();
-  };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') sfxSkip();
+    };
 
-  document.addEventListener('pointerdown', onPointerDown);
-  window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+
+    sfxCleanupListeners = () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, 400);
 
   sfxCleanupListeners = () => {
-    document.removeEventListener('pointerdown', onPointerDown);
-    window.removeEventListener('keydown', onKeyDown);
+    clearTimeout(skipTimeout);
   };
 
   try {

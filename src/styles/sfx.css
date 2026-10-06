@@ -13,6 +13,10 @@
   --sfx-white: #FFFFFF;
 }
 
+.sfx-charge {
+  position: relative !important;
+}
+
 .sfx-charge > *:not(.sfx-fz) {
   opacity: 0.5;
   transition: opacity 0.3s;
@@ -20,8 +24,7 @@
 
 .sfx-fz {
   position: absolute;
-  left: -1.5px;
-  top: -1.5px;
+  inset: 0;
   overflow: visible;
   pointer-events: none;
   z-index: 1000;
