@@ -234,23 +234,27 @@ export const submitRegistration = createServerFn({ method: "POST" })
 
     const regNo = application?.registration_no || defaultRegNo;
 
-    // Non-blocking asynchronous sync to Google Sheets mirror
-    void mirrorToSheetsInBackground({
-      webhookUrl,
-      lovableKey,
-      sheetsKey,
-      createdAt: application?.created_at || new Date().toISOString(),
-      registrationNo: regNo,
-      fullName: data.fullName,
-      scholarNumber: normalizedScholar,
-      email: normalizedEmail,
-      phone: data.phone,
-      primaryTrack: data.primaryTrack,
-      secondaryTrack: data.secondaryTrack,
-      portfolioUrl: data.portfolioUrl,
-      motivation: data.motivation,
-      status: "pending",
-    });
+    // Reliable Google Sheets sync before serverless container suspends
+    try {
+      await mirrorToSheetsInBackground({
+        webhookUrl,
+        lovableKey,
+        sheetsKey,
+        createdAt: application?.created_at || new Date().toISOString(),
+        registrationNo: regNo,
+        fullName: data.fullName,
+        scholarNumber: normalizedScholar,
+        email: normalizedEmail,
+        phone: data.phone,
+        primaryTrack: data.primaryTrack,
+        secondaryTrack: data.secondaryTrack,
+        portfolioUrl: data.portfolioUrl,
+        motivation: data.motivation,
+        status: "pending",
+      });
+    } catch (sheetErr) {
+      console.warn("[Google Sheets sync non-fatal error]", sheetErr);
+    }
 
     return {
       registrationNo: regNo,
@@ -328,23 +332,27 @@ export const updateRegistration = createServerFn({ method: "POST" })
     const lovableKey = process.env["LOVABLE_API_KEY"];
     const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
 
-    // Non-blocking asynchronous sync to Google Sheets mirror
-    void mirrorToSheetsInBackground({
-      webhookUrl,
-      lovableKey,
-      sheetsKey,
-      createdAt: updatedApp?.updated_at || new Date().toISOString(),
-      registrationNo: regNo,
-      fullName: data.fullName,
-      scholarNumber: normalizedScholar,
-      email: normalizedEmail,
-      phone: data.phone,
-      primaryTrack: data.primaryTrack,
-      secondaryTrack: data.secondaryTrack,
-      portfolioUrl: data.portfolioUrl,
-      motivation: data.motivation,
-      status: "updated",
-    });
+    // Reliable Google Sheets sync before serverless container suspends
+    try {
+      await mirrorToSheetsInBackground({
+        webhookUrl,
+        lovableKey,
+        sheetsKey,
+        createdAt: updatedApp?.updated_at || new Date().toISOString(),
+        registrationNo: regNo,
+        fullName: data.fullName,
+        scholarNumber: normalizedScholar,
+        email: normalizedEmail,
+        phone: data.phone,
+        primaryTrack: data.primaryTrack,
+        secondaryTrack: data.secondaryTrack,
+        portfolioUrl: data.portfolioUrl,
+        motivation: data.motivation,
+        status: "updated",
+      });
+    } catch (sheetErr) {
+      console.warn("[Google Sheets sync non-fatal error]", sheetErr);
+    }
 
     return {
       registrationNo: regNo,
