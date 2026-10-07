@@ -83,18 +83,7 @@ function handleSupabaseError(error: unknown): never {
     const details = (err.details || "").toLowerCase();
 
     if (err.code === "23505" || errorMsg.includes("duplicate") || errorMsg.includes("unique")) {
-      if (errorMsg.includes("scholar_number") || details.includes("scholar_number")) {
-        throw new Error("An application with this Scholar Number has already been submitted.");
-      }
-      if (
-        errorMsg.includes("institute_email") ||
-        errorMsg.includes("email") ||
-        details.includes("institute_email") ||
-        details.includes("email")
-      ) {
-        throw new Error("An application with this Email Address has already been submitted.");
-      }
-      throw new Error("An application with this email or scholar number has already been submitted.");
+      throw new Error("An application with this scholar number and email address already exists.");
     }
   }
 
@@ -194,14 +183,19 @@ export const submitRegistration = createServerFn({ method: "POST" })
     const normalizedScholar = data.scholarNumber.toUpperCase().trim();
     const normalizedEmail = data.email.toLowerCase().trim();
 
-    // Check if an application already exists for this scholar number or email
+    // Check if an application already exists matching BOTH scholar number AND email
     const { data: existingApp } = await supabaseAdmin
       .from("applications")
       .select("id, registration_no, created_at")
-      .or(`scholar_number.eq.${normalizedScholar},institute_email.eq.${normalizedEmail}`)
+      .eq("scholar_number", normalizedScholar)
+      .eq("institute_email", normalizedEmail)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (existingApp) {
+      throw new Error("An application with this scholar number and email address already exists.");
+    }
 
     const webhookUrl =
       process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
@@ -214,60 +208,6 @@ export const submitRegistration = createServerFn({ method: "POST" })
     const lovableKey = process.env["LOVABLE_API_KEY"];
     const sheetsKey = process.env["GOOGLE_SHEETS_API_KEY"];
 
-    // If an application already exists, update it instead of creating a duplicate row!
-    if (existingApp && existingApp.registration_no) {
-      const regNo = existingApp.registration_no;
-      const updatePayload = {
-        full_name: data.fullName,
-        scholar_number: normalizedScholar,
-        institute_email: normalizedEmail,
-        phone_number: data.phone,
-        primary_track: data.primaryTrack,
-        secondary_track: data.secondaryTrack ?? null,
-        portfolio_url: data.portfolioUrl || null,
-        motivation: data.motivation,
-        first_year_confirmed: data.consent,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { data: updatedApp, error: updateError } = await supabaseAdmin
-        .from("applications")
-        .update(updatePayload)
-        .eq("id", existingApp.id)
-        .select("id, registration_no, created_at, updated_at")
-        .maybeSingle();
-
-      if (updateError) {
-        handleSupabaseError(updateError);
-      }
-
-      // Non-blocking asynchronous sync to Google Sheets mirror
-      void mirrorToSheetsInBackground({
-        webhookUrl,
-        lovableKey,
-        sheetsKey,
-        createdAt: updatedApp?.updated_at || new Date().toISOString(),
-        registrationNo: regNo,
-        fullName: data.fullName,
-        scholarNumber: normalizedScholar,
-        email: normalizedEmail,
-        phone: data.phone,
-        primaryTrack: data.primaryTrack,
-        secondaryTrack: data.secondaryTrack,
-        portfolioUrl: data.portfolioUrl,
-        motivation: data.motivation,
-        status: "updated",
-      });
-
-      return {
-        registrationNo: regNo,
-        candidateId: regNo,
-        sheetSynced: true,
-        isUpdated: true,
-      };
-    }
-
-    // Otherwise, perform a new insertion
     const defaultRegNo = generateRegistrationNo();
     const insertData = {
       registration_no: defaultRegNo,
@@ -359,11 +299,12 @@ export const updateRegistration = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!updatedApp && !error) {
-      // Fallback: try by scholar_number or email in case registration_no differed
+      // Fallback: try matching both scholar_number and institute_email
       const fallbackResult = await supabaseAdmin
         .from("applications")
         .update(updatePayload)
-        .or(`scholar_number.eq.${normalizedScholar},institute_email.eq.${normalizedEmail}`)
+        .eq("scholar_number", normalizedScholar)
+        .eq("institute_email", normalizedEmail)
         .select("id, registration_no, created_at, updated_at")
         .maybeSingle();
       

@@ -401,7 +401,7 @@ function Index() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Button type="button" variant="electric" onClick={handleSaveResponse}>
-                  Save response
+                  Save a response
                 </Button>
                 <Button type="button" variant="outline" onClick={handleEditClick}>
                   <Edit3 className="mr-1 size-4" /> Edit your response
