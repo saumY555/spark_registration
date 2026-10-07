@@ -73,7 +73,7 @@ const SPREADSHEET_ID = "1O7-6hK2oc4Y_kkwL01GUFVK_gIU9-mB8JLrSTDFnJQ0";
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_sheets";
 
 function generateRegistrationNo() {
-  return `SGT26-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  return `SPARKY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 function handleSupabaseError(error: unknown): never {

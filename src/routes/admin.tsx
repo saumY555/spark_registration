@@ -502,7 +502,7 @@ function AdminPage() {
             <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by name, scholar no, email, phone, or SGT26 ID…"
+              placeholder="Search by name, scholar no, email, phone, or Registration ID…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="pl-9 text-sm"
@@ -631,14 +631,25 @@ function AdminPage() {
                         {formatTimestampIST(app.created_at)}
                       </td>
                       <td className="p-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openCandidateDetails(app)}
-                          className="h-8 px-2 text-xs font-bold"
-                        >
-                          <Eye className="mr-1 size-3.5" /> View
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openCandidateDetails(app)}
+                            className="h-8 px-2 text-xs font-bold"
+                          >
+                            <Eye className="mr-1 size-3.5" /> View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteCandidate(app.id, app.full_name)}
+                            className="h-8 px-2 text-xs font-bold text-destructive hover:bg-destructive hover:text-destructive-foreground border-destructive/30"
+                            title={`Delete ${app.full_name}`}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
