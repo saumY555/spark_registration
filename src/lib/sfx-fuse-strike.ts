@@ -366,6 +366,7 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     conn.style.display = 'flex';
     conn.style.visibility = 'visible';
     conn.scrollTop = 0;
+    void conn.offsetHeight;
 
     const aEl = conn.querySelector<SVGElement>('.sfx-bg');
     if (!aEl) {
@@ -487,8 +488,24 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     endTimer = window.setTimeout(finalize, 2100);
   }
 
+  // Pre-trigger font loading for Anton and Barlow Condensed so glyph measurements are immediate
+  if (typeof document !== 'undefined' && document.fonts) {
+    try {
+      document.fonts.load('80px Anton');
+      document.fonts.load('16px "Barlow Condensed"');
+    } catch {
+      // Ignore
+    }
+  }
+
+  const fontPromise =
+    typeof document !== 'undefined' && document.fonts && document.fonts.ready
+      ? document.fonts.ready
+      : Promise.resolve();
+
   Promise.all([
     fuse(),
+    fontPromise,
     new Promise<void>(r => {
       setTimeout(r, 300);
     }),
