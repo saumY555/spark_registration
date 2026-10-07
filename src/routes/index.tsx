@@ -14,9 +14,9 @@ import { sfxPlayFuseAndStrike } from "@/lib/sfx-fuse-strike";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Register | Spark Got Talent 2026" },
+      { title: "Register | Talent Got Spark 2026" },
       { name: "description", content: "Register for Spark Club's first-year recruitment competition at IIIT Bhopal." },
-      { property: "og:title", content: "Register for Spark Got Talent 2026" },
+      { property: "og:title", content: "Register for Talent Got Spark 2026" },
       { property: "og:description", content: "Two days. Five tracks. One path into Spark Club for IIIT Bhopal first-years." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -254,7 +254,7 @@ function Index() {
   return (
     <main className="overflow-hidden bg-background text-foreground">
       <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-5 py-4 md:px-10">
-        <a href="#top" className="flex items-center gap-3.5" aria-label="Spark Got Talent home">
+        <a href="#top" className="flex items-center gap-3.5" aria-label="Talent Got Spark home">
           <img src="/spark-logo.png" alt="Spark Club" className="size-12 object-contain rounded-lg shadow-sm" />
           <span className="text-xs sm:text-sm font-extrabold uppercase leading-tight">
             Spark Club<br />
