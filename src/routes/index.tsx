@@ -253,9 +253,9 @@ function Index() {
 
   return (
     <main className="overflow-hidden bg-background text-foreground">
-      <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-5 py-4 md:px-10">
-        <a href="#top" className="flex items-center gap-3.5" aria-label="Search For Spark home">
-          <img src="/spark-logo.png" alt="Spark Club" className="size-12 object-contain rounded-lg shadow-sm" />
+      <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-4 py-3 sm:px-6 md:px-10 md:py-4">
+        <a href="#top" className="flex items-center gap-2.5 sm:gap-3.5 min-w-0" aria-label="Search For Spark home">
+          <img src="/spark-logo.png" alt="Spark Club" className="size-9 sm:size-12 shrink-0 object-contain rounded-lg shadow-sm" />
           <span className="text-xs sm:text-sm font-extrabold uppercase leading-tight">
             Spark Club<br />
             <span className="font-medium text-muted-foreground">IIIT Bhopal</span>
@@ -266,14 +266,17 @@ function Index() {
           <a href="#format" className="hover:text-primary">How it works</a>
           <a href="#register" className="hover:text-primary">Register</a>
         </nav>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/admin" className="font-extrabold text-xs uppercase">
-              <ShieldCheck className="mr-1 size-3.5 text-primary" /> Admin
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <Button variant="outline" size="sm" asChild className="h-8 sm:h-9 px-2 sm:px-3 text-xs">
+            <Link to="/admin" aria-label="Admin Portal" title="Admin Portal" className="flex items-center font-extrabold uppercase">
+              <ShieldCheck className="size-4 text-primary sm:mr-1.5 sm:size-3.5" />
+              <span className="hidden sm:inline">Admin</span>
             </Link>
           </Button>
-          <Button variant="electric" asChild>
-            <a href="#register">Register <ArrowRight /></a>
+          <Button variant="electric" size="sm" asChild className="h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-bold">
+            <a href="#register" className="flex items-center">
+              Register <ArrowRight className="ml-1 size-3.5" />
+            </a>
           </Button>
         </div>
       </header>
