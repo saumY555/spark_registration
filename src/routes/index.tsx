@@ -515,7 +515,7 @@ function Index() {
                   </Select>
                 </Field>
                 <div className="sm:col-span-2">
-                  <Field label="Portfolio or GitHub (optional)">
+                  <Field label="Previous work drive link / portfolio">
                     <Input
                       name="portfolioUrl"
                       type="url"
