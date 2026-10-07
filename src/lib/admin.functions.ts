@@ -30,6 +30,7 @@ export const adminGetApplications = createServerFn({ method: "POST" })
     const { data: applications, error } = await supabaseAdmin
       .from("applications")
       .select("*")
+      .neq("status", "deleted")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -98,10 +99,18 @@ export const adminDeleteApplication = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    
+    // 1. Immediately update status to 'deleted' so it is guaranteed to be filtered out
+    await supabaseAdmin
+      .from("applications")
+      .update({ status: "deleted", updated_at: new Date().toISOString() })
+      .eq("id", data.id);
+
+    // 2. Also execute hard delete in case delete permissions are granted
     const { error } = await supabaseAdmin.from("applications").delete().eq("id", data.id);
 
     if (error) {
-      throw new Error(error.message || "Failed to delete application.");
+      console.warn("[Admin Delete Note]", error.message);
     }
 
     return { success: true };

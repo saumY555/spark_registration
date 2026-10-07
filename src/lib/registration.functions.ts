@@ -201,12 +201,13 @@ export const submitRegistration = createServerFn({ method: "POST" })
     const normalizedScholar = data.scholarNumber.toUpperCase().trim();
     const normalizedEmail = data.email.toLowerCase().trim();
 
-    // Check if an application already exists matching BOTH scholar number AND email
+    // Check if an active application already exists matching BOTH scholar number AND email
     const { data: existingApp } = await supabaseAdmin
       .from("applications")
       .select("id, registration_no, created_at")
       .eq("scholar_number", normalizedScholar)
       .eq("institute_email", normalizedEmail)
+      .neq("status", "deleted")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
