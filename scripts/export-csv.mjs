@@ -16,6 +16,22 @@ function escapeCsvCell(value) {
   return str;
 }
 
+function formatTimestampToIST(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
 async function exportData() {
   console.log("Fetching applications from Supabase...");
   const { data, error } = await supabase
@@ -50,7 +66,10 @@ async function exportData() {
 
   const header = columns.join(",");
   const rows = data.map((row) =>
-    columns.map((col) => escapeCsvCell(row[col])).join(",")
+    columns.map((col) => {
+      const val = col === "created_at" ? formatTimestampToIST(row[col]) : row[col];
+      return escapeCsvCell(val);
+    }).join(",")
   );
 
   const csvContent = [header, ...rows].join("\n");

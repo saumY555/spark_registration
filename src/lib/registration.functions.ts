@@ -95,6 +95,23 @@ function handleSupabaseError(error: unknown): never {
   throw new Error(message);
 }
 
+export function formatTimestampToIST(dateStr?: string | Date): string {
+  if (!dateStr) return "";
+  const d = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+  if (isNaN(d.getTime())) return String(dateStr);
+
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
 async function mirrorToSheetsInBackground(params: {
   webhookUrl?: string;
   lovableKey?: string;
@@ -112,6 +129,7 @@ async function mirrorToSheetsInBackground(params: {
   status: "pending" | "updated";
 }) {
   const { webhookUrl, lovableKey, sheetsKey } = params;
+  const formattedTime = formatTimestampToIST(params.createdAt);
 
   if (webhookUrl && !webhookUrl.includes("YOUR_SCRIPT_ID")) {
     try {
@@ -120,7 +138,7 @@ async function mirrorToSheetsInBackground(params: {
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         redirect: "follow",
         body: JSON.stringify({
-          created_at: params.createdAt,
+          created_at: formattedTime,
           registration_no: params.registrationNo,
           full_name: params.fullName,
           scholar_number: params.scholarNumber,
@@ -134,7 +152,7 @@ async function mirrorToSheetsInBackground(params: {
           status: params.status,
         }),
       });
-      console.log(`[Google Sheets Webhook] Synced ${params.registrationNo}`);
+      console.log(`[Google Sheets Webhook] Synced ${params.registrationNo} (${formattedTime})`);
     } catch (err) {
       console.error("[Google Sheets Webhook Error]", err);
     }
@@ -152,7 +170,7 @@ async function mirrorToSheetsInBackground(params: {
           body: JSON.stringify({
             majorDimension: "ROWS",
             values: [[
-              params.createdAt,
+              formattedTime,
               params.registrationNo,
               params.fullName,
               params.email,

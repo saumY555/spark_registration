@@ -16,6 +16,22 @@ const WEBHOOK_URL = process.env.GOOGLE_SHEETS_WEBHOOK_URL || env.GOOGLE_SHEETS_W
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+function formatTimestampToIST(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
 async function syncAllToSheets() {
   console.log("1. Fetching all applications from Supabase database...");
   const { data: applications, error } = await supabase
@@ -36,7 +52,7 @@ async function syncAllToSheets() {
   for (let i = 0; i < applications.length; i++) {
     const app = applications[i];
     const payload = {
-      created_at: app.created_at || new Date().toISOString(),
+      created_at: formatTimestampToIST(app.created_at),
       registration_no: app.registration_no,
       full_name: app.full_name,
       scholar_number: app.scholar_number,
