@@ -266,14 +266,19 @@ function Index() {
           <a href="#format" className="hover:text-primary">How it works</a>
           <a href="#register" className="hover:text-primary">Register</a>
         </nav>
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          <Button variant="outline" size="sm" asChild className="h-8 sm:h-9 px-2 sm:px-3 text-xs">
-            <Link to="/admin" aria-label="Admin Portal" title="Admin Portal" className="flex items-center font-extrabold uppercase">
-              <ShieldCheck className="size-4 text-primary sm:mr-1.5 sm:size-3.5" />
-              <span className="hidden sm:inline">Admin</span>
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="hidden sm:inline-flex h-9 px-3 text-xs font-extrabold uppercase border-foreground/30 hover:border-foreground"
+          >
+            <Link to="/admin" aria-label="Admin Portal">
+              <ShieldCheck className="mr-1.5 size-3.5 text-primary" />
+              <span>Admin</span>
             </Link>
           </Button>
-          <Button variant="electric" size="sm" asChild className="h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-bold">
+          <Button variant="electric" size="sm" asChild className="h-9 px-4 text-xs sm:text-sm font-bold shadow-sm">
             <a href="#register" className="flex items-center">
               Register <ArrowRight className="ml-1 size-3.5" />
             </a>
@@ -612,40 +617,52 @@ function Index() {
       </section>
 
       <footer className="border-t border-foreground/20 px-5 py-8 md:px-10">
-        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row">
-          <span>Spark Club · IIIT Bhopal</span>
-          <span>Society for Programming, Automation, Robotics and Knowledge</span>
-           <div className="flex items-center gap-5">
-          <a
-            href="https://www.instagram.com/spark_iiitb/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Instagram"
-            
-          >
-            <FaInstagram className="size-6" />
-          </a>
+        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-1">
+            <span>Spark Club · IIIT Bhopal</span>
+            <span className="text-[11px] text-muted-foreground">Society for Programming, Automation, Robotics and Knowledge</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            <Link
+              to="/admin"
+              className="inline-flex items-center gap-1.5 rounded border border-foreground/30 bg-card/60 px-3 py-1.5 text-xs font-extrabold text-foreground transition-colors hover:border-foreground hover:text-primary"
+            >
+              <ShieldCheck className="size-3.5 text-primary" />
+              <span>Admin Portal</span>
+            </Link>
 
-          <a
-            href="https://www.linkedin.com/company/spark-iiitb/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="LinkedIn"
+            <div className="flex items-center gap-4">
+              <a
+                href="https://www.instagram.com/spark_iiitb/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="hover:text-primary transition-colors"
+              >
+                <FaInstagram className="size-5" />
+              </a>
 
-          >
-            <FaLinkedin className="size-6" />
-          </a>
+              <a
+                href="https://www.linkedin.com/company/spark-iiitb/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="LinkedIn"
+                className="hover:text-primary transition-colors"
+              >
+                <FaLinkedin className="size-5" />
+              </a>
 
-          <a
-            href="https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Whatsapp"
-  
-          >
-            <FaWhatsapp className="size-6" />
-          </a>
-        </div>
+              <a
+                href="https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Whatsapp"
+                className="hover:text-primary transition-colors"
+              >
+                <FaWhatsapp className="size-5" />
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
     </main>

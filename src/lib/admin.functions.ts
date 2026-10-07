@@ -1,12 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "spark@1234";
+function getAdminPassword(): string {
+  if (typeof process !== "undefined" && process.env?.ADMIN_PASSWORD) {
+    return process.env.ADMIN_PASSWORD;
+  }
+  return "spark@1234";
+}
 
 export const adminVerifyPassword = createServerFn({ method: "POST" })
   .validator((input: { password: string }) => z.object({ password: z.string() }).parse(input))
   .handler(async ({ data }) => {
-    if (data.password === ADMIN_PASSWORD) {
+    const adminPassword = getAdminPassword();
+    if (data.password === adminPassword) {
       return { success: true };
     }
     throw new Error("Invalid admin password. Access denied.");
@@ -15,7 +21,8 @@ export const adminVerifyPassword = createServerFn({ method: "POST" })
 export const adminGetApplications = createServerFn({ method: "POST" })
   .validator((input: { password: string }) => z.object({ password: z.string() }).parse(input))
   .handler(async ({ data }) => {
-    if (data.password !== ADMIN_PASSWORD) {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
       throw new Error("Unauthorized. Invalid password.");
     }
 
@@ -49,7 +56,8 @@ export const adminUpdateApplication = createServerFn({ method: "POST" })
       .parse(input)
   )
   .handler(async ({ data }) => {
-    if (data.password !== ADMIN_PASSWORD) {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
       throw new Error("Unauthorized. Invalid password.");
     }
 
@@ -84,7 +92,8 @@ export const adminDeleteApplication = createServerFn({ method: "POST" })
     z.object({ password: z.string(), id: z.string() }).parse(input)
   )
   .handler(async ({ data }) => {
-    if (data.password !== ADMIN_PASSWORD) {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
       throw new Error("Unauthorized. Invalid password.");
     }
 
