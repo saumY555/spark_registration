@@ -13,7 +13,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "export:data": "node scripts/export-csv.mjs"
+    "export:data": "node scripts/export-csv.mjs",
+    "sync:sheets": "node scripts/sync-all-to-sheets.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
