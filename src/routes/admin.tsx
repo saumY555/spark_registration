@@ -6,6 +6,7 @@ import {
   Clock,
   Download,
   Eye,
+  EyeOff,
   Filter,
   KeyRound,
   Lock,
@@ -96,6 +97,7 @@ function AdminPage() {
   const deleteAppFn = useServerFn(adminDeleteApplication);
 
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
@@ -359,15 +361,27 @@ function AdminPage() {
               </label>
               <div className="relative">
                 <Input
-                  type="password"
-                  placeholder="••••••••"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter admin password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   autoFocus
                   required
                   className="pr-10"
                 />
-                <KeyRound className="pointer-events-none absolute right-3 top-3.5 size-4 text-muted-foreground" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-4 text-primary" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                </button>
               </div>
             </div>
 
