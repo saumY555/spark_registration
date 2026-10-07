@@ -400,16 +400,42 @@ function Index() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button type="button" variant="electric" onClick={handleSaveResponse}>
-                  Save response
-                </Button>
-                <Button type="button" variant="outline" onClick={handleEditClick}>
-                  <Edit3 className="mr-1 size-4" /> Edit your response
-                </Button>
-                <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
-                  <RotateCcw className="mr-1 size-4" /> Submit another application
-                </Button>
+              <div className="mt-6 space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <Button type="button" variant="electric" onClick={handleSaveResponse}>
+                    Save response
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleEditClick}>
+                    <Edit3 className="mr-1 size-4" /> Edit your response
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
+                    <RotateCcw className="mr-1 size-4" /> Submit another application
+                  </Button>
+                </div>
+                
+                <div className="border-2 border-secondary bg-secondary/10 p-4">
+                  <p className="text-sm font-bold text-foreground mb-3">
+                    ⚠️ Important: Joining the WhatsApp group is <span className="text-primary">mandatory</span> for all registered candidates
+                  </p>
+                  <Button 
+                    type="button" 
+                    variant="electric" 
+                    size="lg"
+                    className="w-full"
+                    asChild
+                  >
+                    <a 
+                      href="https://chat.whatsapp.com/IZ5bD8QSLYGLbXCYITbw8Z" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <FaWhatsapp className="mr-2 size-5" /> Join WhatsApp Group
+                    </a>
+                  </Button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    All event updates, task details, and important announcements will be shared on this group.
+                  </p>
+                </div>
               </div>
               {!result.sheetSynced && (
                 <p className="mt-4 text-xs text-muted-foreground">Your application is safely stored in the database.</p>
