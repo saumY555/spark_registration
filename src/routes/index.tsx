@@ -1,6 +1,6 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, Trophy, Users } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, ShieldCheck, Trophy, Users } from "lucide-react";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
 import { FaInstagram, FaLinkedin, FaWhatsapp } from "react-icons/fa";
 
@@ -266,7 +266,16 @@ function Index() {
           <a href="#format" className="hover:text-primary">How it works</a>
           <a href="#register" className="hover:text-primary">Register</a>
         </nav>
-        <Button variant="electric" asChild><a href="#register">Register <ArrowRight /></a></Button>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/admin" className="font-extrabold text-xs uppercase">
+              <ShieldCheck className="mr-1 size-3.5 text-primary" /> Admin
+            </Link>
+          </Button>
+          <Button variant="electric" asChild>
+            <a href="#register">Register <ArrowRight /></a>
+          </Button>
+        </div>
       </header>
 
       <section id="top" className="relative mx-auto grid min-h-[78vh] max-w-7xl items-center gap-10 px-5 py-12 md:grid-cols-[1.15fr_.85fr] md:px-10 md:py-16">
