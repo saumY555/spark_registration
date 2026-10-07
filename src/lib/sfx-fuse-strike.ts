@@ -77,7 +77,10 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
     '<div class="sfx-dk"></div>' +
     '<div class="sfx-ci">' +
     '<div class="sfx-top sfx-up" data-d="560"><span class="sfx-k">SPARK 26\u201327 TEAM</span>' +
+    '<div class="sfx-top-right">' +
     (reg ? '<span class="sfx-chip">' + esc(reg) + '</span>' : '') +
+    '<button type="button" class="sfx-close-btn" id="sfx-close-btn" aria-label="Return to Main Page" title="Return to Main Page">&#x2715;</button>' +
+    '</div>' +
     '</div>' +
     '<div class="sfx-hl" role="heading" aria-level="1">' +
     '<span class="sfx-l1">' +
@@ -97,6 +100,9 @@ function buildOverlay(reg: string, links: typeof SFX_LINKS) {
     rows +
     '</div>' +
     '<div class="sfx-ft sfx-up" data-d="1120">Your response is saved. Keep your registration number.</div>' +
+    '<div class="sfx-actions sfx-up" data-d="1200">' +
+    '<button type="button" class="sfx-return-btn" id="sfx-return-btn">\u2190 Return to Main Page</button>' +
+    '</div>' +
     '</div>';
 
   el.querySelectorAll<HTMLElement>('.sfx-row').forEach(r => {
@@ -148,6 +154,43 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     }
   }
 
+  function dismissOverlay() {
+    playing = false;
+    cancelAnimationFrame(raf);
+    clearTimeout(safety);
+    clearTimeout(endTimer);
+    cleanupTemp();
+
+    conn.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+    conn.style.opacity = '0';
+    conn.style.transform = 'scale(0.98)';
+
+    setTimeout(() => {
+      if (conn.parentNode) conn.parentNode.removeChild(conn);
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      if (card) {
+        card.style.visibility = '';
+        card.style.display = '';
+        card.style.opacity = '1';
+        try {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch {
+          // Ignore
+        }
+      }
+    }, 250);
+  }
+
+  conn.querySelector('#sfx-return-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissOverlay();
+  });
+  conn.querySelector('#sfx-close-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissOverlay();
+  });
+
   function finalize() {
     if (!playing && !conn.hidden) return;
     playing = false;
@@ -172,12 +215,21 @@ export function sfxPlayFuseAndStrike(card: HTMLElement, regNo: string) {
     document.removeEventListener('keydown', onKey, true);
   }
 
-  function skip() {
+  function skip(e?: Event) {
+    if (e && e.target && ((e.target as HTMLElement).closest('#sfx-return-btn') || (e.target as HTMLElement).closest('#sfx-close-btn'))) {
+      return;
+    }
     if (playing) finalize();
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') skip();
+    if (e.key === 'Escape') {
+      if (playing) {
+        finalize();
+      } else {
+        dismissOverlay();
+      }
+    }
   }
 
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
