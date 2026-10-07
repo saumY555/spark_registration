@@ -78,10 +78,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Talent Got Spark 2026" },
+      { title: "Search For Spark 2026" },
       { name: "description", content: "First-year recruitment competition by Spark Club, IIIT Bhopal." },
       { name: "author", content: "Spark Club, IIIT Bhopal" },
-      { property: "og:title", content: "Talent Got Spark 2026" },
+      { property: "og:title", content: "Search For Spark 2026" },
       { property: "og:description", content: "First-year recruitment competition by Spark Club, IIIT Bhopal." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
