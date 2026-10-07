@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, ShieldCheck, Trophy, Users } from "lucide-react";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
-import { FaInstagram, FaLinkedin, FaWhatsapp } from "react-icons/fa";
+import { FaInstagram, FaLinkedinIn, FaWhatsapp } from "react-icons/fa";
 
 import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
@@ -364,16 +364,57 @@ function Index() {
               className="relative self-start border-2 border-foreground bg-card p-6 shadow-[10px_10px_0_var(--secondary)] sm:p-8"
               role="status"
             >
-              <div className="mb-6 grid size-14 place-items-center bg-secondary">
-                <Check className="size-8" />
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                <div>
+                  <div className="mb-4 grid size-14 place-items-center bg-secondary">
+                    <Check className="size-8" />
+                  </div>
+                  <p className="text-xs font-extrabold uppercase text-primary">
+                    {result.isUpdated ? "Application updated" : "Registration complete"}
+                  </p>
+                  <h3 className="mt-1 font-display text-4xl uppercase sm:text-5xl">
+                    {result.isUpdated ? "Changes saved." : "You’re in."}
+                  </h3>
+                </div>
+
+                {/* Big Side-by-Side Instagram, LinkedIn & WhatsApp Brand Icons */}
+                <div className="flex flex-row items-center gap-2.5 sm:gap-3.5 sm:self-start pt-1">
+                  <a
+                    href="https://www.instagram.com/spark_iiitb/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Follow Spark Club on Instagram"
+                    title="Follow @spark_iiitb on Instagram"
+                    className="group relative grid size-12 sm:size-14 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[4px_4px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-gradient-to-tr hover:from-[#f09433] hover:via-[#dc2743] hover:to-[#bc1888] hover:text-white hover:shadow-[6px_6px_0_var(--foreground)]"
+                  >
+                    <FaInstagram className="size-6 sm:size-7 transition-transform duration-200 group-hover:scale-110" />
+                  </a>
+
+                  <a
+                    href="https://www.linkedin.com/company/spark-iiitb/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Connect with Spark Club on LinkedIn"
+                    title="Connect with Spark Club on LinkedIn"
+                    className="group relative grid size-12 sm:size-14 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[4px_4px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-[#004182] hover:text-white hover:shadow-[6px_6px_0_var(--foreground)]"
+                  >
+                    <FaLinkedinIn className="size-6 sm:size-7 transition-transform duration-200 group-hover:scale-110" />
+                  </a>
+
+                  <a
+                    href="https://chat.whatsapp.com/IZ5bD8QSLYGLbXCYITbw8Z"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Join Spark Recruitment WhatsApp Group"
+                    title="Join Official WhatsApp Group"
+                    className="group relative grid size-12 sm:size-14 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[4px_4px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-[#25D366] hover:text-white hover:shadow-[6px_6px_0_var(--foreground)]"
+                  >
+                    <FaWhatsapp className="size-6 sm:size-7 transition-transform duration-200 group-hover:scale-110" />
+                  </a>
+                </div>
               </div>
-              <p className="text-xs font-extrabold uppercase text-primary">
-                {result.isUpdated ? "Application updated" : "Registration complete"}
-              </p>
-              <h3 className="mt-2 font-display text-4xl uppercase sm:text-5xl">
-                {result.isUpdated ? "Changes saved." : "You’re in."}
-              </h3>
-              <p className="mt-4 text-sm text-muted-foreground sm:text-base">
+
+              <p className="text-sm text-muted-foreground sm:text-base">
                 {result.isUpdated
                   ? "Your updated application has been saved to the database and synced with the organizers."
                   : "Save your registration number. The Spark team will use your email for event updates."}
@@ -460,7 +501,7 @@ function Index() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">
-              {isEditing && registeredNo && (
+              {isEditing && registeredNo ? (
                 <div className="mb-6 flex items-center justify-between border-2 border-foreground bg-secondary/20 p-4">
                   <div>
                     <span className="text-xs font-extrabold uppercase text-primary">Editing Mode</span>
@@ -479,6 +520,49 @@ function Index() {
                   >
                     Cancel
                   </Button>
+                </div>
+              ) : (
+                <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-foreground/15 pb-4">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase text-primary">Candidate Application</span>
+                    <p className="text-sm font-bold text-muted-foreground">Fill in your details to register</p>
+                  </div>
+
+                  {/* Big Side-by-Side Instagram, LinkedIn & WhatsApp Brand Icons */}
+                  <div className="flex flex-row items-center gap-2.5 sm:gap-3">
+                    <a
+                      href="https://www.instagram.com/spark_iiitb/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Follow Spark Club on Instagram"
+                      title="Follow @spark_iiitb on Instagram"
+                      className="group relative grid size-11 sm:size-12 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[3px_3px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-gradient-to-tr hover:from-[#f09433] hover:via-[#dc2743] hover:to-[#bc1888] hover:text-white hover:shadow-[5px_5px_0_var(--foreground)]"
+                    >
+                      <FaInstagram className="size-5 sm:size-6 transition-transform duration-200 group-hover:scale-110" />
+                    </a>
+
+                    <a
+                      href="https://www.linkedin.com/company/spark-iiitb/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Connect with Spark Club on LinkedIn"
+                      title="Connect with Spark Club on LinkedIn"
+                      className="group relative grid size-11 sm:size-12 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[3px_3px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-[#004182] hover:text-white hover:shadow-[5px_5px_0_var(--foreground)]"
+                    >
+                      <FaLinkedinIn className="size-5 sm:size-6 transition-transform duration-200 group-hover:scale-110" />
+                    </a>
+
+                    <a
+                      href="https://chat.whatsapp.com/IZ5bD8QSLYGLbXCYITbw8Z"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Join Spark Recruitment WhatsApp Group"
+                      title="Join Official WhatsApp Group"
+                      className="group relative grid size-11 sm:size-12 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[3px_3px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-[#25D366] hover:text-white hover:shadow-[5px_5px_0_var(--foreground)]"
+                    >
+                      <FaWhatsapp className="size-5 sm:size-6 transition-transform duration-200 group-hover:scale-110" />
+                    </a>
+                  </div>
                 </div>
               )}
               <div className="grid gap-5 sm:grid-cols-2">
@@ -622,7 +706,7 @@ function Index() {
             <span>Spark Club · IIIT Bhopal</span>
             <span className="text-[11px] text-muted-foreground">Society for Programming, Automation, Robotics and Knowledge</span>
           </div>
-          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+          <div className="flex sm:hidden flex-wrap items-center gap-4">
             <Link
               to="/admin"
               className="inline-flex items-center gap-1.5 rounded border border-foreground/30 bg-card/60 px-3 py-1.5 text-xs font-extrabold text-foreground transition-colors hover:border-foreground hover:text-primary"
@@ -631,37 +715,15 @@ function Index() {
               <span>Admin Portal</span>
             </Link>
 
-            <div className="flex items-center gap-4">
-              <a
-                href="https://www.instagram.com/spark_iiitb/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-                className="hover:text-primary transition-colors"
-              >
-                <FaInstagram className="size-5" />
-              </a>
-
-              <a
-                href="https://www.linkedin.com/company/spark-iiitb/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="LinkedIn"
-                className="hover:text-primary transition-colors"
-              >
-                <FaLinkedin className="size-5" />
-              </a>
-
-              <a
-                href="https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Whatsapp"
-                className="hover:text-primary transition-colors"
-              >
-                <FaWhatsapp className="size-5" />
-              </a>
-            </div>
+            <a
+              href="https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Whatsapp"
+              className="hover:text-primary transition-colors flex items-center gap-1.5"
+            >
+              <FaWhatsapp className="size-5" />
+            </a>
           </div>
         </div>
       </footer>
