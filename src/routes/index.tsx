@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, Trophy, Users } from "lucide-react";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
+import { FaInstagram, FaLinkedin, FaWhatsapp } from "react-icons/fa";
 
 import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
@@ -13,9 +14,9 @@ import { sfxPlayFuseAndStrike } from "@/lib/sfx-fuse-strike";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Register | Spark Got Talent 2026" },
+      { title: "Register | Search For Spark 2026" },
       { name: "description", content: "Register for Spark Club's first-year recruitment competition at IIIT Bhopal." },
-      { property: "og:title", content: "Register for Spark Got Talent 2026" },
+      { property: "og:title", content: "Register for Search For Spark 2026" },
       { property: "og:description", content: "Two days. Five tracks. One path into Spark Club for IIIT Bhopal first-years." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -253,7 +254,7 @@ function Index() {
   return (
     <main className="overflow-hidden bg-background text-foreground">
       <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-5 py-4 md:px-10">
-        <a href="#top" className="flex items-center gap-3.5" aria-label="Spark Got Talent home">
+        <a href="#top" className="flex items-center gap-3.5" aria-label="Search For Spark home">
           <img src="/spark-logo.png" alt="Spark Club" className="size-12 object-contain rounded-lg shadow-sm" />
           <span className="text-xs sm:text-sm font-extrabold uppercase leading-tight">
             Spark Club<br />
@@ -399,16 +400,42 @@ function Index() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button type="button" variant="electric" onClick={handleSaveResponse}>
-                  Save a response
-                </Button>
-                <Button type="button" variant="outline" onClick={handleEditClick}>
-                  <Edit3 className="mr-1 size-4" /> Edit your response
-                </Button>
-                <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
-                  <RotateCcw className="mr-1 size-4" /> Submit another application
-                </Button>
+              <div className="mt-6 space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <Button type="button" variant="electric" onClick={handleSaveResponse}>
+                    Save a response
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleEditClick}>
+                    <Edit3 className="mr-1 size-4" /> Edit your response
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
+                    <RotateCcw className="mr-1 size-4" /> Submit another application
+                  </Button>
+                </div>
+                
+                <div className="border-2 border-secondary bg-secondary/10 p-4">
+                  <p className="text-sm font-bold text-foreground mb-3">
+                    ⚠️ Important: Joining the WhatsApp group is <span className="text-primary">mandatory</span> for all registered candidates
+                  </p>
+                  <Button 
+                    type="button" 
+                    variant="electric" 
+                    size="lg"
+                    className="w-full"
+                    asChild
+                  >
+                    <a 
+                      href="https://chat.whatsapp.com/IZ5bD8QSLYGLbXCYITbw8Z" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <FaWhatsapp className="mr-2 size-5" /> Join WhatsApp Group
+                    </a>
+                  </Button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    All event updates, task details, and important announcements will be shared on this group.
+                  </p>
+                </div>
               </div>
               {!result.sheetSynced && (
                 <p className="mt-4 text-xs text-muted-foreground">Your application is safely stored in the database.</p>
@@ -514,7 +541,7 @@ function Index() {
                   </Select>
                 </Field>
                 <div className="sm:col-span-2">
-                  <Field label="Portfolio or GitHub (optional)">
+                  <Field label="Previous work drive link / portfolio">
                     <Input
                       name="portfolioUrl"
                       type="url"
@@ -572,7 +599,43 @@ function Index() {
         </div>
       </section>
 
-      <footer className="border-t border-foreground/20 px-5 py-8 md:px-10"><div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row"><span>Spark Club · IIIT Bhopal</span><span>Society for Programming, Automation, Robotics and Knowledge</span></div></footer>
+      <footer className="border-t border-foreground/20 px-5 py-8 md:px-10">
+        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row">
+          <span>Spark Club · IIIT Bhopal</span>
+          <span>Society for Programming, Automation, Robotics and Knowledge</span>
+           <div className="flex items-center gap-5">
+          <a
+            href="https://www.instagram.com/spark_iiitb/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Instagram"
+            
+          >
+            <FaInstagram className="size-6" />
+          </a>
+
+          <a
+            href="https://www.linkedin.com/company/spark-iiitb/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn"
+
+          >
+            <FaLinkedin className="size-6" />
+          </a>
+
+          <a
+            href="https://chat.whatsapp.com/D6J3KnMJgUkKyCiU4u54lr"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Whatsapp"
+  
+          >
+            <FaWhatsapp className="size-6" />
+          </a>
+        </div>
+        </div>
+      </footer>
     </main>
   );
 }
