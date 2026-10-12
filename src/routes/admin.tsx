@@ -16,6 +16,7 @@ import {
   Shield,
   ShieldCheck,
   Sparkles,
+  RotateCcw,
   Trash2,
   Users,
   X,
@@ -33,6 +34,7 @@ import {
   adminUpdateApplication,
   adminVerifyPassword,
   adminDeleteApplication,
+  adminResetQuizScore,
 } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/admin")({
@@ -90,11 +92,29 @@ function formatTimestampIST(dateStr?: string | null): string {
   });
 }
 
+function parseQuizResult(adminNotes?: string | null): {
+  score: number;
+  total: number;
+  percentage: number;
+  timeTakenSeconds?: number;
+  submittedAt?: string;
+} | null {
+  if (!adminNotes) return null;
+  const match = adminNotes.match(/<!--QUIZ:(.*?)-->/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+}
+
 function AdminPage() {
   const verifyPassFn = useServerFn(adminVerifyPassword);
   const getAppsFn = useServerFn(adminGetApplications);
   const updateAppFn = useServerFn(adminUpdateApplication);
   const deleteAppFn = useServerFn(adminDeleteApplication);
+  const resetQuizFn = useServerFn(adminResetQuizScore);
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -244,6 +264,32 @@ function AdminPage() {
     }
   }
 
+  // Reset candidate's quiz score to allow retake
+  async function handleResetCandidateQuiz(id: string, name: string) {
+    if (
+      !confirm(
+        `Are you sure you want to reset the quiz score for ${name}?\n\nThis will clear their quiz result and allow them to take the quiz again.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await resetQuizFn({ data: { password, id } });
+      setApplications(prev =>
+        prev.map(a => (a.id === id ? { ...a, admin_notes: res.updatedNotes } : a))
+      );
+      setActiveCandidate(prev =>
+        prev && prev.id === id ? { ...prev, admin_notes: res.updatedNotes } : prev
+      );
+      setEditNotes(res.updatedNotes || "");
+      setSaveSuccessMsg("Quiz score cleared! Candidate can now retake the quiz.");
+      setTimeout(() => setSaveSuccessMsg(""), 3500);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to reset quiz score.");
+    }
+  }
+
   // Filtered applications
   const filteredApps = useMemo(() => {
     return applications.filter(app => {
@@ -265,22 +311,30 @@ function AdminPage() {
         selectedStatus === "All Statuses" ||
         (app.status || "pending").toLowerCase() === selectedStatus.toLowerCase();
 
+      if (app.scholar_number === "SYSTEM_QUIZ_CONFIG" || app.primary_track === "SYSTEM") {
+        return false;
+      }
+
       return matchesSearch && matchesTrack && matchesStatus;
     });
   }, [applications, searchQuery, selectedTrack, selectedStatus]);
 
   // Track Metrics
   const metrics = useMemo(() => {
-    const total = applications.length;
-    const codeWeb = applications.filter(a => a.primary_track === "Code and Web").length;
-    const aiData = applications.filter(a => a.primary_track === "AI and Data").length;
-    const robotics = applications.filter(a => a.primary_track === "Hardware and Robotics").length;
-    const design = applications.filter(a => a.primary_track === "Design and Media").length;
-    const events = applications.filter(a => a.primary_track === "Events and Outreach").length;
-    const shortlisted = applications.filter(a => a.status === "shortlisted").length;
-    const selected = applications.filter(a => a.status === "selected").length;
+    const validApps = applications.filter(
+      a => a.scholar_number !== "SYSTEM_QUIZ_CONFIG" && a.primary_track !== "SYSTEM"
+    );
+    const total = validApps.length;
+    const codeWeb = validApps.filter(a => a.primary_track === "Code and Web").length;
+    const aiData = validApps.filter(a => a.primary_track === "AI and Data").length;
+    const robotics = validApps.filter(a => a.primary_track === "Hardware and Robotics").length;
+    const design = validApps.filter(a => a.primary_track === "Design and Media").length;
+    const events = validApps.filter(a => a.primary_track === "Events and Outreach").length;
+    const shortlisted = validApps.filter(a => a.status === "shortlisted").length;
+    const selected = validApps.filter(a => a.status === "selected").length;
+    const quizCompleted = validApps.filter(a => parseQuizResult(a.admin_notes) !== null).length;
 
-    return { total, codeWeb, aiData, robotics, design, events, shortlisted, selected };
+    return { total, codeWeb, aiData, robotics, design, events, shortlisted, selected, quizCompleted };
   }, [applications]);
 
   // Export to CSV
@@ -298,6 +352,8 @@ function AdminPage() {
       "Phone",
       "Primary Track",
       "Secondary Track",
+      "Quiz Score (out of 20)",
+      "Quiz Percentage",
       "Portfolio URL",
       "Motivation",
       "Status",
@@ -305,20 +361,25 @@ function AdminPage() {
       "Submitted At (IST)",
     ];
 
-    const rows = filteredApps.map(app => [
-      `"${app.registration_no}"`,
-      `"${app.full_name.replace(/"/g, '""')}"`,
-      `"${app.scholar_number}"`,
-      `"${app.institute_email}"`,
-      `"${app.phone_number}"`,
-      `"${app.primary_track}"`,
-      `"${app.secondary_track || ""}"`,
-      `"${app.portfolio_url || ""}"`,
-      `"${app.motivation.replace(/"/g, '""')}"`,
-      `"${app.status || "pending"}"`,
-      `"${(app.admin_notes || "").replace(/"/g, '""')}"`,
-      `"${formatTimestampIST(app.created_at)}"`,
-    ]);
+    const rows = filteredApps.map(app => {
+      const quiz = parseQuizResult(app.admin_notes);
+      return [
+        `"${app.registration_no}"`,
+        `"${app.full_name.replace(/"/g, '""')}"`,
+        `"${app.scholar_number}"`,
+        `"${app.institute_email}"`,
+        `"${app.phone_number}"`,
+        `"${app.primary_track}"`,
+        `"${app.secondary_track || ""}"`,
+        `"${quiz ? `${quiz.score}/${quiz.total}` : "N/A"}"`,
+        `"${quiz ? `${quiz.percentage}%` : "N/A"}"`,
+        `"${app.portfolio_url || ""}"`,
+        `"${app.motivation.replace(/"/g, '""')}"`,
+        `"${app.status || "pending"}"`,
+        `"${(app.admin_notes || "").replace(/"/g, '""')}"`,
+        `"${formatTimestampIST(app.created_at)}"`,
+      ];
+    });
 
     const csvString = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
@@ -465,7 +526,7 @@ function AdminPage() {
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
         {/* Metrics Counter Bar */}
-        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
           <div className="border border-foreground/20 bg-card p-3 shadow-sm">
             <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Total Applicants</span>
             <p className="font-display text-3xl font-extrabold text-primary">{metrics.total}</p>
@@ -489,6 +550,10 @@ function AdminPage() {
           <div className="border border-foreground/20 bg-card p-3 shadow-sm">
             <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Events & PR</span>
             <p className="font-display text-2xl font-bold">{metrics.events}</p>
+          </div>
+          <div className="border border-foreground/20 bg-amber-400/10 p-3 shadow-sm">
+            <span className="text-[10px] font-extrabold uppercase text-amber-500">Quiz Taken</span>
+            <p className="font-display text-2xl font-extrabold text-amber-500">{metrics.quizCompleted}</p>
           </div>
           <div className="border border-foreground/20 bg-secondary/20 p-3 shadow-sm">
             <span className="text-[10px] font-extrabold uppercase text-foreground">Shortlisted</span>
@@ -568,6 +633,7 @@ function AdminPage() {
                 <th className="p-3 font-extrabold uppercase">Scholar No</th>
                 <th className="p-3 font-extrabold uppercase">Contact</th>
                 <th className="p-3 font-extrabold uppercase">Tracks</th>
+                <th className="p-3 font-extrabold uppercase">Quiz Score</th>
                 <th className="p-3 font-extrabold uppercase">Status</th>
                 <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
                 <th className="p-3 text-right font-extrabold uppercase">Action</th>
@@ -576,7 +642,7 @@ function AdminPage() {
             <tbody className="divide-y divide-foreground/10 font-medium">
               {filteredApps.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={10} className="p-8 text-center text-muted-foreground">
                     {isLoading ? "Loading candidates…" : "No matching candidate records found."}
                   </td>
                 </tr>
@@ -590,6 +656,10 @@ function AdminPage() {
                       : app.status === "rejected"
                       ? "bg-destructive/20 text-destructive font-bold"
                       : "bg-muted text-muted-foreground font-semibold";
+
+                  const quiz = parseQuizResult(app.admin_notes);
+                  const isCodeWeb =
+                    app.primary_track === "Code and Web" || app.secondary_track === "Code and Web";
 
                   return (
                     <tr
@@ -620,6 +690,19 @@ function AdminPage() {
                           <div className="text-[11px] text-muted-foreground">
                             2nd: {app.secondary_track}
                           </div>
+                        )}
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
+                        {quiz ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-400/20 px-2 py-0.5 text-xs font-mono font-extrabold text-amber-500 border border-amber-400/40">
+                            🎯 {quiz.score}/{quiz.total} ({quiz.percentage}%)
+                          </span>
+                        ) : isCodeWeb ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                            ⏳ Pending
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="p-3 whitespace-nowrap">
@@ -752,6 +835,87 @@ function AdminPage() {
                   )}
                 </div>
               </div>
+
+              {/* Code & Web Quiz Assessment Card */}
+              {(() => {
+                const quiz = parseQuizResult(activeCandidate.admin_notes);
+                const isCodeWeb =
+                  activeCandidate.primary_track === "Code and Web" ||
+                  activeCandidate.secondary_track === "Code and Web";
+
+                if (quiz) {
+                  return (
+                    <div className="border-2 border-amber-500/50 bg-amber-400/10 p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🎯</span>
+                          <span className="text-xs font-extrabold uppercase text-amber-500 tracking-wider">
+                            Code & Web Domain Quiz
+                          </span>
+                        </div>
+                        <span className="rounded bg-amber-400/20 px-2 py-0.5 font-mono text-xs font-bold text-amber-500 border border-amber-400/40">
+                          {quiz.percentage}% Accuracy
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 pt-1">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold">Score</span>
+                          <p className="font-mono font-black text-xl text-primary">
+                            {quiz.score} / {quiz.total}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold">Time Taken</span>
+                          <p className="font-mono font-bold text-sm">
+                            {quiz.timeTakenSeconds !== undefined
+                              ? `${Math.floor(quiz.timeTakenSeconds / 60)}m ${quiz.timeTakenSeconds % 60}s`
+                              : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold">Submitted</span>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {quiz.submittedAt
+                              ? new Date(quiz.submittedAt).toLocaleTimeString("en-IN")
+                              : "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground italic">
+                          Candidate cannot retake unless reset
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            handleResetCandidateQuiz(activeCandidate.id, activeCandidate.full_name)
+                          }
+                          className="h-7 px-2.5 text-xs font-bold border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground shadow-sm"
+                        >
+                          <RotateCcw className="size-3 mr-1" />
+                          Reset Quiz Score (Allow Retake)
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isCodeWeb) {
+                  return (
+                    <div className="border border-foreground/20 bg-muted/20 p-3 text-xs flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">Code & Web Screening Quiz:</span>
+                      <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                        ⏳ Not yet attempted
+                      </span>
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
 
               {/* Motivation */}
               <div>

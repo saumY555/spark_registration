@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, ShieldCheck, Trophy, Users } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Code2, Edit3, RotateCcw, ShieldCheck, Trophy, Users } from "lucide-react";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
 import { FaInstagram, FaLinkedinIn, FaWhatsapp } from "react-icons/fa";
 
@@ -271,6 +271,17 @@ function Index() {
             variant="outline"
             size="sm"
             asChild
+            className="h-9 px-3 text-xs font-extrabold uppercase border-primary/50 text-primary hover:bg-primary/10 hover:border-primary"
+          >
+            <Link to="/quiz" aria-label="Code for Code and Web Quiz">
+              <Code2 className="mr-1.5 size-3.5 text-primary" />
+              <span>Code for Code & Web</span>
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
             className="hidden sm:inline-flex h-9 px-3 text-xs font-extrabold uppercase border-foreground/30 hover:border-foreground"
           >
             <Link to="/admin" aria-label="Admin Portal">
@@ -299,6 +310,12 @@ function Index() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button variant="electric" size="lg" asChild><a href="#register">Claim your spot <ArrowDown /></a></Button>
+            <Button variant="default" size="lg" asChild className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold border-2 border-foreground shadow-[4px_4px_0_var(--foreground)]">
+              <Link to="/quiz" className="flex items-center gap-2">
+                <Code2 className="size-5" />
+                Code for Code and Web
+              </Link>
+            </Button>
             <Button variant="outline" size="lg" asChild><a href="#format">See the competition</a></Button>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-foreground/20 pt-5 text-sm font-bold">
@@ -332,6 +349,13 @@ function Index() {
             <article key={track.tag} className={`group border border-foreground bg-card p-5 transition-transform hover:-translate-y-1 ${index < 2 ? "md:col-span-3" : "md:col-span-2"}`}>
               <div className="flex items-start justify-between"><span className="font-display text-4xl text-primary">{track.tag}</span><ArrowRight className="transition-transform group-hover:translate-x-1" /></div>
               <h3 className="mt-10 text-xl font-extrabold uppercase">{track.name}</h3><p className="mt-2 text-sm text-muted-foreground">{track.detail}</p>
+              {track.value === "Code and Web" && (
+                <div className="mt-4 pt-3 border-t border-foreground/10">
+                  <Button asChild size="sm" variant="outline" className="w-full text-xs font-bold border-primary text-primary hover:bg-primary/10">
+                    <Link to="/quiz">Code for Code & Web →</Link>
+                  </Button>
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -494,6 +518,23 @@ function Index() {
                     All event updates, task details, and important announcements will be shared on this group.
                   </p>
                 </div>
+
+                {(formValues.primaryTrack === "Code and Web" || formValues.secondaryTrack === "Code and Web") && (
+                  <div className="border-2 border-primary bg-primary/10 p-4">
+                    <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                      <Code2 className="size-4" />
+                      <span>Code & Web Assessment Ready</span>
+                    </div>
+                    <p className="mt-1 text-xs text-foreground/80">
+                      You selected <strong>Code and Web</strong>. Take your 20-minute online screening quiz to complete your evaluation!
+                    </p>
+                    <Button asChild variant="electric" size="sm" className="mt-3 w-full sm:w-auto font-bold">
+                      <Link to="/quiz">
+                        Take Code for Code & Web Quiz <ArrowRight className="ml-1 size-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
+                )}
               </div>
               {!result.sheetSynced && (
                 <p className="mt-4 text-xs text-muted-foreground">Your application is safely stored in the database.</p>

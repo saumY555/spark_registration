@@ -30,7 +30,6 @@ export const adminGetApplications = createServerFn({ method: "POST" })
     const { data: applications, error } = await supabaseAdmin
       .from("applications")
       .select("*")
-      .neq("status", "deleted")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -99,19 +98,52 @@ export const adminDeleteApplication = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    
-    // 1. Immediately update status to 'deleted' so it is guaranteed to be filtered out
-    await supabaseAdmin
-      .from("applications")
-      .update({ status: "deleted", updated_at: new Date().toISOString() })
-      .eq("id", data.id);
-
-    // 2. Also execute hard delete in case delete permissions are granted
     const { error } = await supabaseAdmin.from("applications").delete().eq("id", data.id);
 
     if (error) {
-      console.warn("[Admin Delete Note]", error.message);
+      throw new Error(error.message || "Failed to delete application.");
     }
 
     return { success: true };
+  });
+
+export const adminResetQuizScore = createServerFn({ method: "POST" })
+  .validator((input: { password: string; id: string }) =>
+    z.object({ password: z.string(), id: z.string() }).parse(input)
+  )
+  .handler(async ({ data }) => {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
+      throw new Error("Unauthorized. Invalid password.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: cand, error: fetchErr } = await supabaseAdmin
+      .from("applications")
+      .select("admin_notes")
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (fetchErr || !cand) {
+      throw new Error("Candidate record not found.");
+    }
+
+    let cleanedNotes = cand.admin_notes || "";
+    cleanedNotes = cleanedNotes.replace(/<!--QUIZ:[\s\S]*?-->/g, "");
+    cleanedNotes = cleanedNotes.replace(/\[Code & Web Quiz\][^\n]*\n?/g, "");
+    cleanedNotes = cleanedNotes.trim() || null;
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("applications")
+      .update({
+        admin_notes: cleanedNotes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+
+    if (updateErr) {
+      throw new Error("Failed to reset candidate quiz score.");
+    }
+
+    return { success: true, updatedNotes: cleanedNotes };
   });
