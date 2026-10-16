@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      build_submissions: {
+        Row: {
+          created_at: string
+          github_url: string | null
+          id: string
+          scholar_number: string
+          screenshot_url: string | null
+          student_name: string
+          updated_at: string
+          website_url: string
+        }
+        Insert: {
+          created_at?: string
+          github_url?: string | null
+          id?: string
+          scholar_number: string
+          screenshot_url?: string | null
+          student_name: string
+          updated_at?: string
+          website_url: string
+        }
+        Update: {
+          created_at?: string
+          github_url?: string | null
+          id?: string
+          scholar_number?: string
+          screenshot_url?: string | null
+          student_name?: string
+          updated_at?: string
+          website_url?: string
+        }
+        Relationships: []
+      }
       applications: {
         Row: {
           admin_notes: string | null

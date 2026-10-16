@@ -21,6 +21,7 @@ import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DropYourBuildModal } from "@/components/drop-your-build-modal";
 import {
   lookupRegistration,
   REGISTRATIONS_OPEN,
@@ -91,6 +92,25 @@ function Index() {
   const [lookupEmail, setLookupEmail] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupError, setLookupError] = useState("");
+
+  const [isDropModalOpen, setIsDropModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const checkHash = () => {
+        if (
+          window.location.hash === "#drop-build" ||
+          window.location.hash === "#drop-your-build" ||
+          window.location.search.includes("drop=true")
+        ) {
+          setIsDropModalOpen(true);
+        }
+      };
+      checkHash();
+      window.addEventListener("hashchange", checkHash);
+      return () => window.removeEventListener("hashchange", checkHash);
+    }
+  }, []);
 
   const [formValues, setFormValues] = useState({
     fullName: "",
@@ -384,12 +404,10 @@ function Index() {
             <Button
               variant="electric"
               size="sm"
-              asChild
-              className="h-9 px-3.5 text-xs sm:text-sm font-extrabold shadow-sm"
+              onClick={() => setIsDropModalOpen(true)}
+              className="h-9 px-3.5 text-xs sm:text-sm font-extrabold shadow-sm cursor-pointer"
             >
-              <a href="#register" className="flex items-center gap-1.5">
-                <span>🔥 Drop Your Build</span>
-              </a>
+              <span>🔥 Drop Your Build</span>
             </Button>
           )}
         </div>
@@ -1038,6 +1056,8 @@ function Index() {
           </div>
         </div>
       </footer>
+
+      <DropYourBuildModal open={isDropModalOpen} onOpenChange={setIsDropModalOpen} />
     </main>
   );
 }
