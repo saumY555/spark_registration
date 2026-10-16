@@ -167,5 +167,21 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: no-preference) {
   .marquee-track { animation: marquee 24s linear infinite; }
   .spark-pulse { animation: spark-pulse 3s ease-in-out infinite; }
+  .animate-note-place { animation: notePlace 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 }
+
+@keyframes notePlace {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(-20px);
+  }
+  65% {
+    transform: scale(1.04) translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 

@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      feedback_notes: {
+        Row: {
+          author_name: string | null
+          color: string
+          created_at: string
+          id: string
+          message: string
+          rotation: number
+          status: string
+        }
+        Insert: {
+          author_name?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          message: string
+          rotation?: number
+          status?: string
+        }
+        Update: {
+          author_name?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          message?: string
+          rotation?: number
+          status?: string
+        }
+        Relationships: []
+      }
       applications: {
         Row: {
           admin_notes: string | null
