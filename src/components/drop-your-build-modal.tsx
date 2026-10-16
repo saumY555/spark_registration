@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { captureWebsiteScreenshot, submitBuild, isSafePublicUrl } from "@/lib/build-submission.functions";
 import { isValidScholarNumber } from "@/lib/registration.functions";
 import { renderInstagramStoryPoster, dataUrlToFile } from "@/lib/poster-generator";
+import { cn } from "@/lib/utils";
 
 interface DropYourBuildModalProps {
   open: boolean;
@@ -68,6 +69,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
 
   // Poster state
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null);
+  const [posterFormat, setPosterFormat] = useState<"poster" | "story">("poster");
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [customCaption, setCustomCaption] = useState(
@@ -208,19 +210,21 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   }
 
   // Generate Final Poster & Record Build
-  async function handleGeneratePoster() {
+  async function handleGeneratePoster(formatOverride?: "poster" | "story") {
+    const fmt = formatOverride || posterFormat;
     setIsGeneratingPoster(true);
     try {
-      // 1. Render the 1080x1920 Instagram Story Poster on Canvas
+      // Render official poster canvas
       const generatedUrl = await renderInstagramStoryPoster({
         studentName: studentName.trim(),
         websiteUrl: websiteUrl.trim(),
         screenshotDataUrl: screenshotDataUrl,
+        mode: fmt,
       });
 
       setPosterDataUrl(generatedUrl);
 
-      // 2. Record build submission in backend
+      // Record build submission in backend
       try {
         await submitBuildFn({
           data: {
@@ -236,12 +240,34 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
       }
 
       setStep("poster");
-      toast.success("Your Instagram Story poster is ready! 🔥");
+      toast.success("Your Spark Club poster is ready! 🔥");
     } catch (err) {
       console.error("[Poster Generation Error]", err);
       toast.error("Failed to generate poster. Please try again.");
     } finally {
       setIsGeneratingPoster(false);
+    }
+  }
+
+  // Switch between Master Poster (1850x2048) and 9:16 Story (1080x1920)
+  async function handleFormatSwitch(nextFormat: "poster" | "story") {
+    if (nextFormat === posterFormat) return;
+    setPosterFormat(nextFormat);
+    if (posterDataUrl) {
+      setIsGeneratingPoster(true);
+      try {
+        const nextUrl = await renderInstagramStoryPoster({
+          studentName: studentName.trim(),
+          websiteUrl: websiteUrl.trim(),
+          screenshotDataUrl: screenshotDataUrl,
+          mode: nextFormat,
+        });
+        setPosterDataUrl(nextUrl);
+      } catch (e) {
+        console.error("Format switch error", e);
+      } finally {
+        setIsGeneratingPoster(false);
+      }
     }
   }
 
@@ -597,7 +623,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                         </>
                       ) : (
                         <>
-                          Generate 1080×1920 Poster <Sparkles className="ml-1.5 size-4" />
+                          Generate Official Poster <Sparkles className="ml-1.5 size-4" />
                         </>
                       )}
                     </Button>
@@ -694,20 +720,55 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
           {step === "poster" && posterDataUrl && (
             <div className="space-y-6">
               <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start">
-                {/* 9:16 Instagram Story Preview */}
+                {/* Official Spark Club Poster Preview */}
                 <div className="flex flex-col items-center">
-                  <div className="relative aspect-[9/16] w-full max-w-[280px] overflow-hidden rounded-lg border-4 border-foreground bg-black shadow-[8px_8px_0_var(--foreground)]">
+                  {/* Format Switcher */}
+                  <div className="mb-3 flex w-full max-w-[300px] gap-1 rounded border-2 border-foreground bg-muted/40 p-1 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => handleFormatSwitch("poster")}
+                      disabled={isGeneratingPoster}
+                      className={cn(
+                        "flex-1 rounded py-1.5 px-2 text-center text-[10px] font-extrabold uppercase tracking-wider transition-all",
+                        posterFormat === "poster"
+                          ? "bg-foreground text-background shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Master Poster
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFormatSwitch("story")}
+                      disabled={isGeneratingPoster}
+                      className={cn(
+                        "flex-1 rounded py-1.5 px-2 text-center text-[10px] font-extrabold uppercase tracking-wider transition-all",
+                        posterFormat === "story"
+                          ? "bg-foreground text-background shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      9:16 Story
+                    </button>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "relative w-full max-w-[300px] overflow-hidden rounded-lg border-4 border-foreground bg-black shadow-[8px_8px_0_var(--foreground)] transition-all",
+                      posterFormat === "story" ? "aspect-[9/16]" : "aspect-[925/1024]"
+                    )}
+                  >
                     <img
                       src={posterDataUrl}
-                      alt="Generated Instagram Story Poster"
-                      className="size-full object-cover"
+                      alt="Generated Spark Club Poster"
+                      className="size-full object-contain"
                     />
-                    <div className="absolute bottom-2 left-2 rounded bg-black/80 px-2 py-0.5 text-[10px] font-bold text-white">
-                      1080 × 1920 PX
+                    <div className="absolute bottom-2 left-2 rounded bg-black/85 px-2 py-0.5 text-[10px] font-bold text-[#CCFF00] border border-white/20">
+                      {posterFormat === "story" ? "1080 × 1920 STORY" : "OFFICIAL POSTER"}
                     </div>
                   </div>
                   <p className="mt-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Full High-Resolution Poster
+                    {posterFormat === "story" ? "Full-Height Instagram Story" : "Master High-Resolution Poster"}
                   </p>
                 </div>
 
