@@ -1,6 +1,19 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowRight, Check, ChevronDown, Clock3, Edit3, RotateCcw, ShieldCheck, Trophy, Users } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Clock3,
+  Edit3,
+  Lock,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
 import { FaInstagram, FaLinkedinIn, FaWhatsapp } from "react-icons/fa";
 
@@ -8,16 +21,40 @@ import sparkPoster from "@/assets/spark-poster.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitRegistration, updateRegistration } from "@/lib/registration.functions";
+import {
+  lookupRegistration,
+  REGISTRATIONS_OPEN,
+  submitRegistration,
+  updateRegistration,
+} from "@/lib/registration.functions";
 import { sfxPlayFuseAndStrike } from "@/lib/sfx-fuse-strike";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Register | Search For Spark 2026" },
-      { name: "description", content: "Register for Spark Club's first-year recruitment competition at IIIT Bhopal." },
-      { property: "og:title", content: "Register for Search For Spark 2026" },
-      { property: "og:description", content: "Two days. Five tracks. One path into Spark Club for IIIT Bhopal first-years." },
+      {
+        title: REGISTRATIONS_OPEN
+          ? "Register | Search For Spark 2026"
+          : "Registrations Closed | Search For Spark 2026",
+      },
+      {
+        name: "description",
+        content: REGISTRATIONS_OPEN
+          ? "Register for Spark Club's first-year recruitment competition at IIIT Bhopal."
+          : "Registrations for Search For Spark 2026 are now closed. Competition updates and schedule for registered candidates.",
+      },
+      {
+        property: "og:title",
+        content: REGISTRATIONS_OPEN
+          ? "Register for Search For Spark 2026"
+          : "Registrations Closed | Search For Spark 2026",
+      },
+      {
+        property: "og:description",
+        content: REGISTRATIONS_OPEN
+          ? "Two days. Five tracks. One path into Spark Club for IIIT Bhopal first-years."
+          : "Applications for Search For Spark 2026 are now closed. Check details, join WhatsApp group and view your candidate pass.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -42,12 +79,18 @@ const stages = [
 function Index() {
   const submit = useServerFn(submitRegistration);
   const update = useServerFn(updateRegistration);
+  const lookupFn = useServerFn(lookupRegistration);
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ registrationNo?: string; candidateId?: string; isUpdated?: boolean; sheetSynced: boolean } | null>(null);
   const [registeredNo, setRegisteredNo] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
+
+  const [lookupIdentifier, setLookupIdentifier] = useState("");
+  const [lookupEmail, setLookupEmail] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupError, setLookupError] = useState("");
 
   const [formValues, setFormValues] = useState({
     fullName: "",
@@ -251,6 +294,59 @@ function Index() {
     }
   }
 
+  async function handleLookup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLookupError("");
+    setLookingUp(true);
+    try {
+      const data = await lookupFn({
+        data: {
+          identifier: lookupIdentifier,
+          email: lookupEmail,
+        },
+      });
+
+      const foundFormValues = {
+        fullName: data.fullName,
+        scholarNumber: data.scholarNumber,
+        email: data.email,
+        phone: data.phone,
+        primaryTrack: data.primaryTrack,
+        secondaryTrack: data.secondaryTrack,
+        portfolioUrl: data.portfolioUrl,
+        motivation: data.motivation,
+      };
+
+      setFormValues(foundFormValues);
+      setRegisteredNo(data.registrationNo);
+      setResult({
+        registrationNo: data.registrationNo,
+        candidateId: data.registrationNo,
+        isUpdated: false,
+        sheetSynced: true,
+      });
+
+      try {
+        localStorage.setItem(
+          "sgt26_registration",
+          JSON.stringify({
+            registrationNo: data.registrationNo,
+            isUpdated: false,
+            formValues: foundFormValues,
+          })
+        );
+      } catch {
+        // Ignore localStorage error
+      }
+
+      window.scrollTo({ top: document.getElementById("register")?.offsetTop ?? 0, behavior: "smooth" });
+    } catch (lookupErr) {
+      setLookupError(lookupErr instanceof Error ? lookupErr.message : "Unable to find registration.");
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
   return (
     <main className="overflow-hidden bg-background text-foreground">
       <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-foreground/20 px-4 py-3 sm:px-6 md:px-10 md:py-4">
@@ -264,7 +360,7 @@ function Index() {
         <nav className="hidden items-center gap-8 text-xs font-bold uppercase md:flex">
           <a href="#tracks" className="hover:text-primary">Tracks</a>
           <a href="#format" className="hover:text-primary">How it works</a>
-          <a href="#register" className="hover:text-primary">Register</a>
+          <a href="#register" className="hover:text-primary">{REGISTRATIONS_OPEN ? "Register" : "Status"}</a>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <Button
@@ -278,18 +374,40 @@ function Index() {
               <span>Admin</span>
             </Link>
           </Button>
-          <Button variant="electric" size="sm" asChild className="h-9 px-4 text-xs sm:text-sm font-bold shadow-sm">
-            <a href="#register" className="flex items-center">
-              Register <ArrowRight className="ml-1 size-3.5" />
-            </a>
-          </Button>
+          {REGISTRATIONS_OPEN ? (
+            <Button variant="electric" size="sm" asChild className="h-9 px-4 text-xs sm:text-sm font-bold shadow-sm">
+              <a href="#register" className="flex items-center">
+                Register <ArrowRight className="ml-1 size-3.5" />
+              </a>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="h-9 px-3.5 text-xs sm:text-sm font-bold border-destructive/60 text-destructive bg-destructive/10 hover:bg-destructive/20 shadow-sm"
+            >
+              <a href="#register" className="flex items-center gap-1.5">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75"></span>
+                  <span className="relative inline-flex size-2 rounded-full bg-destructive"></span>
+                </span>
+                <span>Closed</span>
+              </a>
+            </Button>
+          )}
         </div>
       </header>
 
       <section id="top" className="relative mx-auto grid min-h-[78vh] max-w-7xl items-center gap-10 px-5 py-12 md:grid-cols-[1.15fr_.85fr] md:px-10 md:py-16">
         <div className="relative z-10">
-          <div className="mb-5 inline-flex items-center gap-2 border border-foreground px-3 py-1 text-xs font-extrabold uppercase">
+          <div className="mb-5 inline-flex flex-wrap items-center gap-2 border border-foreground px-3 py-1 text-xs font-extrabold uppercase">
             <span className="size-2 bg-secondary" /> First-year recruitment · 2026
+            {!REGISTRATIONS_OPEN && (
+              <span className="border-l border-foreground/30 pl-2 text-destructive font-black flex items-center gap-1">
+                <Lock className="size-3" /> Registrations Closed
+              </span>
+            )}
           </div>
           <h1 className="font-display text-[clamp(5rem,12vw,10rem)] leading-[.78] uppercase">
             Search for<br /><span className="text-primary">Spark.</span>
@@ -298,7 +416,13 @@ function Index() {
             Your potential is the qualification. Compete across five tracks and earn your place in Spark Club.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button variant="electric" size="lg" asChild><a href="#register">Claim your spot <ArrowDown /></a></Button>
+            {REGISTRATIONS_OPEN ? (
+              <Button variant="electric" size="lg" asChild><a href="#register">Claim your spot <ArrowDown /></a></Button>
+            ) : (
+              <Button variant="electric" size="lg" asChild>
+                <a href="#register">View Status & Pass <ArrowDown /></a>
+              </Button>
+            )}
             <Button variant="outline" size="lg" asChild><a href="#format">See the competition</a></Button>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-foreground/20 pt-5 text-sm font-bold">
@@ -352,10 +476,35 @@ function Index() {
       <section id="register" className="mx-auto max-w-7xl px-5 py-20 md:px-10">
         <div className="grid gap-12 lg:grid-cols-[.75fr_1.25fr]">
           <div>
-            <p className="text-xs font-extrabold uppercase text-primary">Applications open</p>
-            <h2 className="mt-3 font-display text-6xl uppercase md:text-8xl">Your turn<br />to <span className="text-primary">spark.</span></h2>
-            <p className="mt-6 max-w-md text-muted-foreground">Open only to first-year students of IIIT Bhopal. Detailed timings and Phase A tasks will be shared after registration closes.</p>
-            <div className="mt-8 border-l-4 border-secondary bg-card p-5 text-sm"><strong>Remember:</strong> selection rewards reasoning, initiative and learning speed—not prior experience.</div>
+            {REGISTRATIONS_OPEN ? (
+              <p className="text-xs font-extrabold uppercase text-primary">Applications open</p>
+            ) : (
+              <div className="inline-flex items-center gap-2 border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs font-black uppercase text-destructive mb-3">
+                <Lock className="size-3.5" /> Registrations Closed
+              </div>
+            )}
+            <h2 className="mt-3 font-display text-6xl uppercase md:text-8xl">
+              {REGISTRATIONS_OPEN ? (
+                <>Your turn<br />to <span className="text-primary">spark.</span></>
+              ) : (
+                <>Search for<br /><span className="text-primary">Spark.</span></>
+              )}
+            </h2>
+            <p className="mt-6 max-w-md text-muted-foreground">
+              {REGISTRATIONS_OPEN
+                ? "Open only to first-year students of IIIT Bhopal. Detailed timings and Phase A tasks will be shared after registration closes."
+                : "Registrations for Search for Spark 2026 have officially ended. Thank you to everyone from the first-year batch of IIIT Bhopal who applied!"}
+            </p>
+            <div className="mt-8 border-l-4 border-secondary bg-card p-5 text-sm space-y-2">
+              <strong className="block text-foreground font-bold">
+                {REGISTRATIONS_OPEN ? "Remember:" : "Important Notice for Candidates:"}
+              </strong>
+              <p className="text-muted-foreground">
+                {REGISTRATIONS_OPEN
+                  ? "Selection rewards reasoning, initiative and learning speed—not prior experience."
+                  : "All event updates, Phase 1 tasks, and live challenge instructions are communicated exclusively through the official WhatsApp recruitment group."}
+              </p>
+            </div>
           </div>
 
           {result ? (
@@ -370,7 +519,7 @@ function Index() {
                     <Check className="size-8" />
                   </div>
                   <p className="text-xs font-extrabold uppercase text-primary">
-                    {result.isUpdated ? "Application updated" : "Registration complete"}
+                    {result.isUpdated ? "Application updated" : "Registration confirmed"}
                   </p>
                   <h3 className="mt-1 font-display text-4xl uppercase sm:text-5xl">
                     {result.isUpdated ? "Changes saved." : "You’re in."}
@@ -463,12 +612,27 @@ function Index() {
                   <Button type="button" variant="electric" onClick={handleSaveResponse}>
                     Save a response
                   </Button>
-                  <Button type="button" variant="outline" onClick={handleEditClick}>
-                    <Edit3 className="mr-1 size-4" /> Edit your response
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
-                    <RotateCcw className="mr-1 size-4" /> Submit another application
-                  </Button>
+                  {REGISTRATIONS_OPEN ? (
+                    <>
+                      <Button type="button" variant="outline" onClick={handleEditClick}>
+                        <Edit3 className="mr-1 size-4" /> Edit your response
+                      </Button>
+                      <Button type="button" variant="outline" onClick={handleNewApplicationClick}>
+                        <RotateCcw className="mr-1 size-4" /> Submit another application
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setResult(null);
+                        setLookupError("");
+                      }}
+                    >
+                      <Search className="mr-1.5 size-4" /> Look up another pass
+                    </Button>
+                  )}
                 </div>
                 
                 <div className="border-2 border-secondary bg-secondary/10 p-4">
@@ -498,6 +662,157 @@ function Index() {
               {!result.sheetSynced && (
                 <p className="mt-4 text-xs text-muted-foreground">Your application is safely stored in the database.</p>
               )}
+            </div>
+          ) : !REGISTRATIONS_OPEN ? (
+            <div className="border-2 border-foreground bg-card p-6 shadow-[10px_10px_0_var(--primary)] sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-foreground/15 pb-6">
+                <div>
+                  <div className="mb-3 inline-flex items-center gap-2 rounded bg-destructive/15 px-3 py-1 text-xs font-black uppercase text-destructive border border-destructive/30">
+                    <Lock className="size-3.5" /> Portal Closed
+                  </div>
+                  <h3 className="font-display text-4xl uppercase sm:text-5xl">
+                    Registrations <span className="text-primary">Closed</span>
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    The registration window for Search for Spark 2026 has concluded.
+                  </p>
+                </div>
+
+                {/* Big Side-by-Side Instagram, LinkedIn & WhatsApp Brand Icons */}
+                <div className="flex flex-row items-center gap-2.5 sm:gap-3">
+                  <a
+                    href="https://www.instagram.com/spark_iiitb/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Follow Spark Club on Instagram"
+                    title="Follow @spark_iiitb on Instagram"
+                    className="group relative grid size-11 sm:size-12 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[3px_3px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-gradient-to-tr hover:from-[#f09433] hover:via-[#dc2743] hover:to-[#bc1888] hover:text-white hover:shadow-[5px_5px_0_var(--foreground)]"
+                  >
+                    <FaInstagram className="size-5 sm:size-6 transition-transform duration-200 group-hover:scale-110" />
+                  </a>
+
+                  <a
+                    href="https://www.linkedin.com/company/spark-iiitb/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Connect with Spark Club on LinkedIn"
+                    title="Connect with Spark Club on LinkedIn"
+                    className="group relative grid size-11 sm:size-12 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[3px_3px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-[#004182] hover:text-white hover:shadow-[5px_5px_0_var(--foreground)]"
+                  >
+                    <FaLinkedinIn className="size-5 sm:size-6 transition-transform duration-200 group-hover:scale-110" />
+                  </a>
+
+                  <a
+                    href="https://chat.whatsapp.com/IZ5bD8QSLYGLbXCYITbw8Z"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Join Spark Recruitment WhatsApp Group"
+                    title="Join Official WhatsApp Group"
+                    className="group relative grid size-11 sm:size-12 place-items-center rounded-xl border-2 border-foreground bg-background text-foreground shadow-[3px_3px_0_var(--foreground)] transition-all duration-200 hover:-translate-y-1 hover:border-foreground hover:bg-[#25D366] hover:text-white hover:shadow-[5px_5px_0_var(--foreground)]"
+                  >
+                    <FaWhatsapp className="size-5 sm:size-6 transition-transform duration-200 group-hover:scale-110" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-6">
+                <div className="border border-foreground/20 bg-background p-5 text-sm space-y-3">
+                  <h4 className="font-extrabold uppercase text-xs text-primary tracking-wider">
+                    Next Phase Information
+                  </h4>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2.5">
+                      <span className="font-bold text-secondary">✦</span>
+                      <span>
+                        <strong className="text-foreground">Phase 1 Briefings:</strong> Beginner materials and domain task briefs will be released shortly.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="font-bold text-secondary">✦</span>
+                      <span>
+                        <strong className="text-foreground">Live Supervised Challenge:</strong> Assignments have been provided in respective groups.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="font-bold text-secondary">✦</span>
+                      <span>
+                        <strong className="text-foreground">Stay Informed:</strong> Join our WhatsApp channel and follow us on Instagram for schedule announcements.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="border-2 border-secondary bg-secondary/10 p-4">
+                  <p className="text-sm font-bold text-foreground mb-3">
+                    ⚠️ Registered candidates: Make sure you are in the WhatsApp group
+                  </p>
+                  <Button 
+                    type="button" 
+                    variant="electric" 
+                    size="lg"
+                    className="w-full"
+                    asChild
+                  >
+                    <a 
+                      href="https://chat.whatsapp.com/IZ5bD8QSLYGLbXCYITbw8Z" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <FaWhatsapp className="mr-2 size-5" /> Join WhatsApp Group
+                    </a>
+                  </Button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    All competition updates, task submissions, and timings will be coordinated via WhatsApp.
+                  </p>
+                </div>
+
+                {/* Registration Pass Lookup Form */}
+                <div className="border-t border-foreground/15 pt-5">
+                  <div className="mb-3">
+                    <span className="text-xs font-extrabold uppercase text-primary">Already registered?</span>
+                    <h4 className="text-base font-extrabold uppercase">Check Your Registration Pass</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Enter your Scholar Number (or SPARKY ID) and registered email to view and save your pass.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleLookup} className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        placeholder="Scholar No. or SPARKY ID"
+                        value={lookupIdentifier}
+                        onChange={(e) => setLookupIdentifier(e.target.value.toUpperCase())}
+                        required
+                        className="bg-background"
+                      />
+                      <Input
+                        type="email"
+                        placeholder="Registered email address"
+                        value={lookupEmail}
+                        onChange={(e) => setLookupEmail(e.target.value)}
+                        required
+                        className="bg-background"
+                      />
+                    </div>
+
+                    {lookupError && (
+                      <p className="border border-destructive bg-destructive/10 p-2.5 text-xs text-destructive" role="alert">
+                        {lookupError}
+                      </p>
+                    )}
+
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      disabled={lookingUp}
+                      className="w-full sm:w-auto font-bold uppercase border-foreground hover:bg-foreground hover:text-background"
+                    >
+                      <Search className="mr-1.5 size-4" />
+                      {lookingUp ? "Verifying…" : "Find My Application"}
+                    </Button>
+                  </form>
+                </div>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="border-2 border-foreground bg-card p-5 shadow-[10px_10px_0_var(--primary)] sm:p-8">

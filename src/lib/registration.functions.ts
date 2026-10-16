@@ -9,6 +9,8 @@ const tracks = [
   "Events and Outreach",
 ] as const;
 
+export const REGISTRATIONS_OPEN = false;
+
 export const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 export function isValid10DigitPhone(val: string): boolean {
@@ -197,6 +199,10 @@ async function mirrorToSheetsInBackground(params: {
 export const submitRegistration = createServerFn({ method: "POST" })
   .validator((input: RegistrationInput) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
+    if (!REGISTRATIONS_OPEN) {
+      throw new Error("Registrations are closed. No new applications are being accepted.");
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const normalizedScholar = data.scholarNumber.toUpperCase().trim();
     const normalizedEmail = data.email.toLowerCase().trim();
@@ -297,6 +303,10 @@ export type UpdateRegistrationInput = z.infer<typeof updateSchema>;
 export const updateRegistration = createServerFn({ method: "POST" })
   .validator((input: UpdateRegistrationInput) => updateSchema.parse(input))
   .handler(async ({ data }) => {
+    if (!REGISTRATIONS_OPEN) {
+      throw new Error("Registration window has closed. Applications can no longer be edited.");
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const normalizedScholar = data.scholarNumber.toUpperCase().trim();
     const normalizedEmail = data.email.toLowerCase().trim();
@@ -378,5 +388,49 @@ export const updateRegistration = createServerFn({ method: "POST" })
       candidateId: regNo,
       sheetSynced: true,
       isUpdated: true,
+    };
+  });
+
+const lookupSchema = z.object({
+  identifier: z.string().trim().min(2, "Please enter your Scholar Number or Registration Number."),
+  email: z.string().trim().email("Please enter a valid email address."),
+});
+
+export const lookupRegistration = createServerFn({ method: "POST" })
+  .validator((input: { identifier: string; email: string }) => lookupSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const normalizedIdentifier = data.identifier.toUpperCase().trim();
+    const normalizedEmail = data.email.toLowerCase().trim();
+
+    const { data: application, error } = await supabaseAdmin
+      .from("applications")
+      .select("registration_no, full_name, scholar_number, institute_email, phone_number, primary_track, secondary_track, portfolio_url, motivation, created_at")
+      .or(`scholar_number.eq.${normalizedIdentifier},registration_no.eq.${normalizedIdentifier}`)
+      .eq("institute_email", normalizedEmail)
+      .neq("status", "deleted")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Lookup error]", error);
+      throw new Error("Unable to look up registration. Please try again.");
+    }
+
+    if (!application) {
+      throw new Error("No registration found matching this Scholar/Registration number and email address.");
+    }
+
+    return {
+      registrationNo: application.registration_no,
+      fullName: application.full_name,
+      scholarNumber: application.scholar_number,
+      email: application.institute_email,
+      phone: application.phone_number,
+      primaryTrack: application.primary_track,
+      secondaryTrack: application.secondary_track || "",
+      portfolioUrl: application.portfolio_url || "",
+      motivation: application.motivation,
     };
   });
