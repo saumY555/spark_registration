@@ -382,17 +382,13 @@ function Index() {
             </Button>
           ) : (
             <Button
-              variant="outline"
+              variant="electric"
               size="sm"
               asChild
-              className="h-9 px-3.5 text-xs sm:text-sm font-bold border-destructive/60 text-destructive bg-destructive/10 hover:bg-destructive/20 shadow-sm"
+              className="h-9 px-3.5 text-xs sm:text-sm font-extrabold shadow-sm"
             >
               <a href="#register" className="flex items-center gap-1.5">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75"></span>
-                  <span className="relative inline-flex size-2 rounded-full bg-destructive"></span>
-                </span>
-                <span>Closed</span>
+                <span>🔥 Drop Your Build</span>
               </a>
             </Button>
           )}
