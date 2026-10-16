@@ -69,7 +69,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
 
   // Poster state
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null);
-  const [posterFormat, setPosterFormat] = useState<"poster" | "story">("poster");
+  const [posterFormat, setPosterFormat] = useState<"story" | "poster">("story");
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [customCaption, setCustomCaption] = useState(
@@ -728,20 +728,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                 {/* Official Spark Club Poster Preview */}
                 <div className="flex flex-col items-center">
                   {/* Format Switcher */}
-                  <div className="mb-3 flex w-full max-w-[300px] gap-1 rounded border-2 border-foreground bg-muted/40 p-1 text-xs font-bold">
-                    <button
-                      type="button"
-                      onClick={() => handleFormatSwitch("poster")}
-                      disabled={isGeneratingPoster}
-                      className={cn(
-                        "flex-1 rounded py-1.5 px-2 text-center text-[10px] font-extrabold uppercase tracking-wider transition-all",
-                        posterFormat === "poster"
-                          ? "bg-foreground text-background shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Master Poster
-                    </button>
+                  <div className="mb-3 flex w-full max-w-[280px] gap-1 rounded border-2 border-foreground bg-muted/40 p-1 text-xs font-bold">
                     <button
                       type="button"
                       onClick={() => handleFormatSwitch("story")}
@@ -753,14 +740,27 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                           : "text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      9:16 Story
+                      9:16 IG Story
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFormatSwitch("poster")}
+                      disabled={isGeneratingPoster}
+                      className={cn(
+                        "flex-1 rounded py-1.5 px-2 text-center text-[10px] font-extrabold uppercase tracking-wider transition-all",
+                        posterFormat === "poster"
+                          ? "bg-foreground text-background shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Square Master
                     </button>
                   </div>
 
                   <div
                     className={cn(
-                      "relative w-full max-w-[300px] overflow-hidden rounded-lg border-4 border-foreground bg-black shadow-[8px_8px_0_var(--foreground)] transition-all",
-                      posterFormat === "story" ? "aspect-[9/16]" : "aspect-[925/1024]"
+                      "relative w-full overflow-hidden rounded-lg border-4 border-foreground bg-black shadow-[8px_8px_0_var(--foreground)] transition-all",
+                      posterFormat === "story" ? "aspect-[9/16] max-w-[280px]" : "aspect-[925/1024] max-w-[300px]"
                     )}
                   >
                     <img
