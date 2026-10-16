@@ -73,7 +73,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [customCaption, setCustomCaption] = useState(
-    "I just built my first website! 🚀🔥\n\nSharing my build with Spark Club @spark_iiitb.\n\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment"
+    "Hey, I am excited to share my first website! 🚀🔥\n\nSharing my build with Spark Club @spark_iiitb.\n\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment"
   );
 
   // Reset when dialog is reopened
@@ -240,6 +240,11 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
       }
 
       setStep("poster");
+      const displayName = studentName.trim() || "a student";
+      const cleanUrl = websiteUrl.trim();
+      setCustomCaption(
+        `Hey, I am ${displayName} and excited to share my first website! 🚀🔥\n\nCheck out my build: ${cleanUrl}\n\nSharing with @spark_iiitb!\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment`
+      );
       toast.success("Your Spark Club poster is ready! 🔥");
     } catch (err) {
       console.error("[Poster Generation Error]", err);

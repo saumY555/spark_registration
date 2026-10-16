@@ -315,42 +315,32 @@ async function drawPosterLayers(
   ctx.fillRect(tapeX, tapeY, tapeW, tapeH);
   ctx.restore();
 
-  // 7. White Polaroid Section: Student Name & Statement
+  // 7. Remove the bottom option boxes cleanly with Polaroid white
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(-276, 190, 515, 140);
+
+  // 8. Write requested text: "hey i am xyz(name of the student) and excited to share my first website"
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
 
-  const studentDisplayName = options.studentName.trim() || "A Builder";
-
-  // "I’m"
-  ctx.font = "700 18px 'Manrope', sans-serif";
-  ctx.fillStyle = "#64748B";
-  ctx.fillText("I’m", -250, 212);
-
-  // Student's Name in bold display font
-  ctx.font = "900 32px 'Anton', 'Bebas Neue', 'Barlow Condensed', sans-serif";
-  ctx.fillStyle = "#0F172A";
+  const studentDisplayName = options.studentName.trim() || "A Student";
   let nameUpper = studentDisplayName.toUpperCase();
-  if (nameUpper.length > 20) nameUpper = nameUpper.slice(0, 18) + "…";
-  ctx.fillText(nameUpper, -214, 210);
+  if (nameUpper.length > 24) nameUpper = nameUpper.slice(0, 22) + "…";
 
-  // "AND MADE MY FIRST WEBSITE."
-  ctx.font = "900 24px 'Barlow Condensed', 'Anton', 'Manrope', sans-serif";
-  ctx.fillStyle = "#4321A9"; // Royal purple
-  ctx.fillText("AND MADE MY FIRST WEBSITE.", -250, 248);
+  // Line 1: "Hey, I am"
+  ctx.font = "800 18px 'Manrope', system-ui, sans-serif";
+  ctx.fillStyle = "#64748B"; // Elegant slate
+  ctx.fillText("Hey, I am", -250, 218);
 
-  // 8. Bottom Black Box: "🔥 DROP YOUR BUILD"
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#CCFF00";
-  ctx.font = "900 14px 'Barlow Condensed', 'Manrope', sans-serif";
-  ctx.fillText("🔥 DROP YOUR BUILD", -135, 308);
-
-  // 9. Bottom Outlined Box: Deployed Website Domain
+  // Line 2: Student Name in bold display font
+  ctx.font = "900 38px 'Anton', 'Bebas Neue', 'Barlow Condensed', sans-serif";
   ctx.fillStyle = "#0F172A";
-  ctx.font = "700 11px 'Manrope', monospace, sans-serif";
-  let cleanDomain = options.websiteUrl.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-  if (cleanDomain.length > 22) cleanDomain = cleanDomain.slice(0, 20) + "…";
-  ctx.fillText(cleanDomain || "SPARK CLUB 2026", 120, 308);
+  ctx.fillText(nameUpper, -250, 252);
+
+  // Line 3: "and excited to share my first website!"
+  ctx.font = "800 21px 'Barlow Condensed', 'Manrope', sans-serif";
+  ctx.fillStyle = "#4321A9"; // Royal purple
+  ctx.fillText("and excited to share my first website! 🚀", -250, 292);
 
   ctx.restore(); // Restore Polaroid transform
 }
