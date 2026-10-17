@@ -298,6 +298,9 @@ const HTML_CONTENT = (name = "DFB", screenshotUrl = "") => `
           screenshotUrl
             ? `<img src="${screenshotUrl}" class="screenshot" alt="Website Screenshot" />`
             : `
+            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+              <img src="spark_logo_transparent.png" alt="Spark Logo In Frame" style="width: 320px; height: auto; object-fit: contain; filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45));" />
+            </div>
             <svg class="dashed-guide-svg">
               <rect
                 x="1.5"
@@ -363,7 +366,7 @@ async function main() {
   if (fs.existsSync(logoPath)) {
     const logoBase64 = fs.readFileSync(logoPath).toString("base64");
     await page.evaluate((dataUri) => {
-      document.querySelectorAll("img[alt='Spark Logo']").forEach((img) => {
+      document.querySelectorAll("img[alt*='Spark Logo']").forEach((img) => {
         img.src = dataUri;
       });
     }, `data:image/png;base64,${logoBase64}`);

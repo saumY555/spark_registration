@@ -319,28 +319,53 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
                   }}
                 />
               ) : (
-                /* Fallback gradient with dashed stitch guide */
-                <svg
-                  style={{
-                    position: "absolute",
-                    left: "16px",
-                    top: "16px",
-                    width: "688px",
-                    height: "838px",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <rect
-                    x="1.5"
-                    y="1.5"
-                    width="685"
-                    height="835"
-                    fill="none"
-                    stroke="rgba(255, 255, 255, 0.85)"
-                    strokeWidth="2.5"
-                    strokeDasharray="14, 10"
-                  />
-                </svg>
+                /* Fallback gradient with club logo & dashed stitch guide */
+                <>
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <img
+                      src={sparkLogo}
+                      alt="Spark Club Logo"
+                      style={{
+                        width: "320px",
+                        height: "auto",
+                        objectFit: "contain",
+                        filter: "drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45))",
+                      }}
+                    />
+                  </div>
+
+                  <svg
+                    style={{
+                      position: "absolute",
+                      left: "16px",
+                      top: "16px",
+                      width: "688px",
+                      height: "838px",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <rect
+                      x="1.5"
+                      y="1.5"
+                      width="685"
+                      height="835"
+                      fill="none"
+                      stroke="rgba(255, 255, 255, 0.85)"
+                      strokeWidth="2.5"
+                      strokeDasharray="14, 10"
+                    />
+                  </svg>
+                </>
               )}
             </div>
 

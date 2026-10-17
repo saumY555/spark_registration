@@ -244,13 +244,28 @@ async function renderCanvas2D(options: PosterOptions): Promise<string> {
     }
   }
 
-  // Placeholder gradient + dashed stitch guide if no screenshot
+  // Placeholder gradient + club logo + dashed stitch guide if no screenshot
   if (!screenshotDrawn) {
     const frameGrad = ctx.createLinearGradient(frameX, frameY, frameX, frameY + frameH);
     frameGrad.addColorStop(0, "#6238F5");
     frameGrad.addColorStop(1, "#9E2EB9");
     ctx.fillStyle = frameGrad;
     ctx.fillRect(frameX, frameY, frameW, frameH);
+
+    // Centered Club Logo
+    if (logoImg) {
+      const logoW = 320;
+      const logoH = logoW * (logoImg.height / logoImg.width);
+      const logoX = frameX + (frameW - logoW) / 2;
+      const logoY = frameY + (frameH - logoH) / 2;
+      ctx.save();
+      ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+      ctx.shadowBlur = 28;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 12;
+      ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
+      ctx.restore();
+    }
 
     // Dashed stitch line guide: inset 16px, 14px dash, 10px gap
     ctx.save();
