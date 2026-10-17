@@ -23,6 +23,8 @@ export interface PosterOptions {
   websiteUrl?: string;
   screenshotDataUrl?: string | null;
   stageElement?: HTMLElement | null;
+  titleLine1?: string;
+  titleLine2?: string;
 }
 
 /**
@@ -303,20 +305,35 @@ async function renderCanvas2D(options: PosterOptions): Promise<string> {
   ctx.fillText(fullTagText, tagX + tagW / 2, tagY + tagH / 2 + 2);
 
   // 3c. Title
+  const line1 = (options.titleLine1 || "EXCITED TO SHARE").trim().toUpperCase();
+  const line2 = (options.titleLine2 || "MY FIRST WEBSITE!").trim().toUpperCase();
+
+  const line1FontSize = line1.length > 24 ? 50 : line1.length > 18 ? 60 : 70;
+  const line2FontSize = line2.length > 24 ? 50 : line2.length > 18 ? 60 : 70;
+
   ctx.textAlign = "left";
-  ctx.font = "70px 'Anton', Impact, sans-serif";
-
-  // Line 1: "EXCITED TO SHARE" (Anton 70px, color #0E0A18, left x=38, baseline y=1028)
-  ctx.fillStyle = "#0E0A18";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("EXCITED TO SHARE", cardLeft + 38, cardTop + 1028);
 
-  // Line 2: "MY FIRST " in #0E0A18 followed by "WEBSITE!" in #6238F5, baseline y=1105
+  // Line 1: e.g. "EXCITED TO SHARE" (Anton, color #0E0A18, left x=38, baseline y=1028)
+  ctx.font = `${line1FontSize}px 'Anton', Impact, sans-serif`;
   ctx.fillStyle = "#0E0A18";
-  ctx.fillText("MY FIRST ", cardLeft + 38, cardTop + 1105);
-  const myFirstWidth = ctx.measureText("MY FIRST ").width;
-  ctx.fillStyle = "#6238F5";
-  ctx.fillText("WEBSITE!", cardLeft + 38 + myFirstWidth, cardTop + 1105);
+  ctx.fillText(line1, cardLeft + 38, cardTop + 1028);
+
+  // Line 2: e.g. "MY FIRST " in #0E0A18 followed by "WEBSITE!" in #6238F5, baseline y=1105
+  ctx.font = `${line2FontSize}px 'Anton', Impact, sans-serif`;
+  const words = line2.split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    const lastWord = words.pop()!;
+    const firstPart = words.join(" ") + " ";
+    ctx.fillStyle = "#0E0A18";
+    ctx.fillText(firstPart, cardLeft + 38, cardTop + 1105);
+    const firstPartWidth = ctx.measureText(firstPart).width;
+    ctx.fillStyle = "#6238F5";
+    ctx.fillText(lastWord, cardLeft + 38 + firstPartWidth, cardTop + 1105);
+  } else {
+    ctx.fillStyle = "#6238F5";
+    ctx.fillText(line2, cardLeft + 38, cardTop + 1105);
+  }
 
   // 3d. Bottom bars
   // Left bar: x=30 to 450, y=1160 to 1216, background #0E0A18. Text "SPARK CLUB", white, bold sans 24px, centered

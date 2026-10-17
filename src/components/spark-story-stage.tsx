@@ -5,6 +5,8 @@ export interface SparkStoryStageProps extends HTMLAttributes<HTMLDivElement> {
   studentName?: string;
   screenshotUrl?: string | null;
   scale?: number;
+  titleLine1?: string;
+  titleLine2?: string;
 }
 
 /**
@@ -12,13 +14,50 @@ export interface SparkStoryStageProps extends HTMLAttributes<HTMLDivElement> {
  * Ground truth layout matching official Spark Club reference
  */
 export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
-  function SparkStoryStage({ studentName, screenshotUrl, scale = 1, className, style, ...props }, ref) {
+  function SparkStoryStage(
+    { studentName, screenshotUrl, scale = 1, titleLine1, titleLine2, className, style, ...props },
+    ref
+  ) {
     // Sanitize and format name: default "DFB", max 24 chars
     const displayName = useMemo(() => {
       const clean = (studentName || "").trim().toUpperCase();
       if (!clean) return "DFB";
       return clean.length > 24 ? clean.slice(0, 24) : clean;
     }, [studentName]);
+
+    // Sanitize and format custom title lines (with ground-truth defaults)
+    const cleanLine1 = useMemo(() => {
+      const line = (titleLine1 || "EXCITED TO SHARE").trim().toUpperCase();
+      return line.slice(0, 36);
+    }, [titleLine1]);
+
+    const cleanLine2 = useMemo(() => {
+      const line = (titleLine2 || "MY FIRST WEBSITE!").trim().toUpperCase();
+      return line.slice(0, 36);
+    }, [titleLine2]);
+
+    // Split Line 2 so the final word is highlighted in #6238F5
+    const { firstPart, lastWord } = useMemo(() => {
+      const words = cleanLine2.split(/\s+/).filter(Boolean);
+      if (words.length <= 1) {
+        return { firstPart: "", lastWord: words[0] || "WEBSITE!" };
+      }
+      const last = words.pop()!;
+      return { firstPart: words.join(" ") + " ", lastWord: last };
+    }, [cleanLine2]);
+
+    // Dynamic font sizing for long custom titles
+    const line1FontSize = useMemo(() => {
+      if (cleanLine1.length > 24) return 50;
+      if (cleanLine1.length > 18) return 60;
+      return 70;
+    }, [cleanLine1]);
+
+    const line2FontSize = useMemo(() => {
+      if (cleanLine2.length > 24) return 50;
+      if (cleanLine2.length > 18) return 60;
+      return 70;
+    }, [cleanLine2]);
 
     // Calculate dynamic font size for name tag:
     // Text: "HEY, I AM " + NAME. Baseline font is 44px.
@@ -408,7 +447,7 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
                 left: "38px",
                 top: "960px",
                 fontFamily: "'Anton', Impact, sans-serif",
-                fontSize: "70px",
+                fontSize: `${line1FontSize}px`,
                 lineHeight: 1,
                 color: "#0E0A18",
                 textTransform: "uppercase",
@@ -416,7 +455,7 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
                 whiteSpace: "nowrap",
               }}
             >
-              EXCITED TO SHARE
+              {cleanLine1}
             </div>
 
             <div
@@ -425,7 +464,7 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
                 left: "38px",
                 top: "1037px",
                 fontFamily: "'Anton', Impact, sans-serif",
-                fontSize: "70px",
+                fontSize: `${line2FontSize}px`,
                 lineHeight: 1,
                 color: "#0E0A18",
                 textTransform: "uppercase",
@@ -433,7 +472,8 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
                 whiteSpace: "nowrap",
               }}
             >
-              MY FIRST <span style={{ color: "#6238F5" }}>WEBSITE!</span>
+              {firstPart}
+              <span style={{ color: "#6238F5" }}>{lastWord}</span>
             </div>
 
             {/* 3d. Bottom bars */}

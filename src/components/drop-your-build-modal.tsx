@@ -74,6 +74,8 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  const [titleLine1, setTitleLine1] = useState("EXCITED TO SHARE");
+  const [titleLine2, setTitleLine2] = useState("MY FIRST WEBSITE!");
   const [customCaption, setCustomCaption] = useState(
     "Hey, I am DFB and excited to share my first website! 🚀🔥\n\nSharing my build with Spark Club @spark_iiitb.\n\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment"
   );
@@ -221,16 +223,26 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   }
 
   // Generate Final Poster & Record Build
-  async function handleGeneratePoster() {
+  async function handleGeneratePoster(overrideLine1?: string, overrideLine2?: string) {
     setIsGeneratingPoster(true);
     try {
       const effectiveName = studentName.trim() || "DFB";
+      const l1 = overrideLine1 ?? titleLine1;
+      const l2 = overrideLine2 ?? titleLine2;
+      if (overrideLine1 !== undefined) setTitleLine1(overrideLine1);
+      if (overrideLine2 !== undefined) setTitleLine2(overrideLine2);
+
+      // Allow state update to propagate to offscreen stage DOM
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
       // Render official 1080x1920 poster canvas
       const generatedUrl = await renderInstagramStoryPoster({
         studentName: effectiveName,
         websiteUrl: websiteUrl.trim(),
         screenshotDataUrl: screenshotDataUrl,
         stageElement: stageRef.current,
+        titleLine1: l1,
+        titleLine2: l2,
       });
 
       setPosterDataUrl(generatedUrl);
@@ -329,6 +341,8 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
     setScreenshotDataUrl(null);
     setCaptureError("");
     setPosterDataUrl(null);
+    setTitleLine1("EXCITED TO SHARE");
+    setTitleLine2("MY FIRST WEBSITE!");
   }
 
   return (
@@ -520,6 +534,56 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                     </p>
                   </div>
                 </label>
+              </div>
+
+              {/* Optional Poster Headline Customization */}
+              <div className="rounded border-2 border-foreground/20 bg-muted/20 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase text-foreground flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-secondary" /> Poster Headline Text (Optional)
+                  </span>
+                  {(titleLine1 !== "EXCITED TO SHARE" || titleLine2 !== "MY FIRST WEBSITE!") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTitleLine1("EXCITED TO SHARE");
+                        setTitleLine2("MY FIRST WEBSITE!");
+                      }}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase text-muted-foreground mb-1">
+                      Line 1 Headline
+                    </label>
+                    <Input
+                      placeholder="EXCITED TO SHARE"
+                      value={titleLine1}
+                      onChange={(e) => setTitleLine1(e.target.value.toUpperCase())}
+                      maxLength={32}
+                      className="border-foreground bg-background font-bold text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase text-muted-foreground mb-1">
+                      Line 2 Subtitle
+                    </label>
+                    <Input
+                      placeholder="MY FIRST WEBSITE!"
+                      value={titleLine2}
+                      onChange={(e) => setTitleLine2(e.target.value.toUpperCase())}
+                      maxLength={32}
+                      className="border-foreground bg-background font-bold text-xs"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Defaults to <strong>EXCITED TO SHARE</strong> &amp; <strong>MY FIRST WEBSITE!</strong> (the final word is automatically styled in signature Spark purple).
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -799,6 +863,70 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                     </Button>
                   </div>
 
+                  {/* Customize Poster Text */}
+                  <div className="rounded border border-foreground/20 bg-background p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="size-3 text-secondary" /> Customize Poster Text
+                      </span>
+                      {(titleLine1 !== "EXCITED TO SHARE" || titleLine2 !== "MY FIRST WEBSITE!") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTitleLine1("EXCITED TO SHARE");
+                            setTitleLine2("MY FIRST WEBSITE!");
+                            handleGeneratePoster("EXCITED TO SHARE", "MY FIRST WEBSITE!");
+                          }}
+                          className="text-[10px] font-bold text-muted-foreground hover:text-foreground cursor-pointer underline"
+                        >
+                          Reset to default
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <span className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">
+                          Line 1
+                        </span>
+                        <Input
+                          value={titleLine1}
+                          onChange={(e) => setTitleLine1(e.target.value.toUpperCase())}
+                          placeholder="EXCITED TO SHARE"
+                          maxLength={32}
+                          className="h-8 font-bold text-xs bg-muted/20 border-foreground/20"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase">
+                          Line 2
+                        </span>
+                        <Input
+                          value={titleLine2}
+                          onChange={(e) => setTitleLine2(e.target.value.toUpperCase())}
+                          placeholder="MY FIRST WEBSITE!"
+                          maxLength={32}
+                          className="h-8 font-bold text-xs bg-muted/20 border-foreground/20"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isGeneratingPoster}
+                      onClick={() => handleGeneratePoster()}
+                      className="w-full text-xs font-bold border-foreground/30 hover:border-foreground h-8"
+                    >
+                      {isGeneratingPoster ? (
+                        <>
+                          <Loader2 className="mr-1.5 size-3.5 animate-spin" /> Updating…
+                        </>
+                      ) : (
+                        "Update Poster Text"
+                      )}
+                    </Button>
+                  </div>
+
                   {/* Copyable Caption Box */}
                   <div className="rounded border border-foreground/20 bg-background p-3.5 space-y-2">
                     <div className="flex items-center justify-between">
@@ -899,6 +1027,8 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
             ref={stageRef}
             studentName={studentName.trim() || "DFB"}
             screenshotUrl={screenshotDataUrl}
+            titleLine1={titleLine1}
+            titleLine2={titleLine2}
           />
         </div>
       </DialogContent>
