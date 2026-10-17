@@ -98,18 +98,93 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
 
     const targetUrl = safetyCheck.url.toString();
 
-    // 1. Attempt Playwright headless browser capture (720:870 aspect ratio = 1200x1450 @ 2x)
+    // 1. High-speed cloud screenshot engine (Microlink: headless Chromium cluster, exact 1200x1450 @ 2x)
+    // Typically completes in 700ms - 1500ms
+    try {
+      const microlinkUrl = `https://api.microlink.io?url=${encodeURIComponent(
+        targetUrl
+      )}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1200&viewport.height=1450&viewport.deviceScaleFactor=2`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+
+      const response = await fetch(microlinkUrl, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "SparkClub-BuildDrop/1.0",
+          Accept: "image/*",
+        },
+      });
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("image") || contentType.includes("octet-stream")) {
+          const buffer = await response.arrayBuffer();
+          if (buffer.byteLength > 1000) {
+            const base64 = Buffer.from(buffer).toString("base64");
+            const mimeType = contentType.includes("png") ? "image/png" : "image/jpeg";
+            return {
+              success: true,
+              dataUrl: `data:${mimeType};base64,${base64}`,
+            };
+          }
+        }
+      }
+    } catch (microErr) {
+      console.warn("[Microlink capture fallback]", microErr);
+    }
+
+    // 2. Secondary cloud fallback (thum.io / mshots)
+    const backupProviders = [
+      `https://image.thum.io/get/width/1200/crop/1450/${targetUrl}`,
+      `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=1200&h=1450`,
+    ];
+
+    for (const providerUrl of backupProviders) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+
+        const response = await fetch(providerUrl, {
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "SparkClub-BuildDrop/1.0",
+            Accept: "image/*",
+          },
+        });
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("image") || contentType.includes("octet-stream")) {
+            const buffer = await response.arrayBuffer();
+            if (buffer.byteLength > 1000) {
+              const base64 = Buffer.from(buffer).toString("base64");
+              const mimeType = contentType.includes("png") ? "image/png" : "image/jpeg";
+              return {
+                success: true,
+                dataUrl: `data:${mimeType};base64,${base64}`,
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[Backup screenshot provider failed: ${providerUrl}]`, err);
+      }
+    }
+
+    // 3. Tertiary fallback: Local Playwright headless browser (strict 3.5s timeout)
     try {
       const { chromium } = await import("playwright");
-      // Try msedge on Windows, or chrome, or standard chromium
       let browser;
       try {
-        browser = await chromium.launch({ channel: "msedge", timeout: 6000 });
+        browser = await chromium.launch({ timeout: 3500 });
       } catch {
         try {
-          browser = await chromium.launch({ channel: "chrome", timeout: 6000 });
+          browser = await chromium.launch({ channel: "chrome", timeout: 3500 });
         } catch {
-          browser = await chromium.launch({ timeout: 6000 });
+          browser = null;
         }
       }
 
@@ -121,9 +196,8 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 SparkClub/1.0",
         });
         const page = await context.newPage();
-        page.setDefaultTimeout(8000);
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 8000 });
-        await page.waitForTimeout(500); // Allow brief hydration
+        page.setDefaultTimeout(3500);
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 3500 });
 
         const buffer = await page.screenshot({
           type: "png",
@@ -141,55 +215,7 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
         }
       }
     } catch (pwErr) {
-      console.warn("[Playwright direct capture fallback]", pwErr);
-    }
-
-    // 2. High-availability external screenshot providers (1200x1450, 720:870 aspect ratio)
-    const providers = [
-      `https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1200&viewport.height=1450&viewport.deviceScaleFactor=2`,
-      `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=1200&h=1450`,
-    ];
-
-    for (const providerUrl of providers) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 9000);
-
-        const response = await fetch(providerUrl, {
-          signal: controller.signal,
-          headers: {
-            "User-Agent": "SparkClub-BuildDrop/1.0",
-            Accept: "image/*",
-          },
-        });
-        clearTimeout(timeout);
-
-        if (!response.ok) {
-          continue;
-        }
-
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.includes("image") && !contentType.includes("octet-stream")) {
-          continue;
-        }
-
-        const buffer = await response.arrayBuffer();
-        if (buffer.byteLength < 500) {
-          // Empty or error placeholder
-          continue;
-        }
-
-        const base64 = Buffer.from(buffer).toString("base64");
-        const mimeType = contentType.includes("png") ? "image/png" : "image/jpeg";
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-
-        return {
-          success: true,
-          dataUrl,
-        };
-      } catch (err) {
-        console.warn(`[Screenshot provider failed: ${providerUrl}]`, err);
-      }
+      console.warn("[Playwright fallback failed]", pwErr);
     }
 
     return {
