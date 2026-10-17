@@ -19,6 +19,8 @@ import {
   Github,
   Loader2,
   Info,
+  Smartphone,
+  Monitor,
 } from "lucide-react";
 import { FaInstagram } from "react-icons/fa";
 import { toast } from "sonner";
@@ -36,7 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { captureWebsiteScreenshot, submitBuild, isSafePublicUrl } from "@/lib/build-submission.functions";
 import { isValidScholarNumber } from "@/lib/registration.functions";
 import { renderInstagramStoryPoster, dataUrlToFile } from "@/lib/poster-generator";
-import { SparkStoryStage } from "@/components/spark-story-stage";
+import { SparkStoryStage, SparkWideStage } from "@/components/spark-story-stage";
 import { cn } from "@/lib/utils";
 
 interface DropYourBuildModalProps {
@@ -71,9 +73,14 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
 
   // Poster state
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null);
+  const [storyPosterDataUrl, setStoryPosterDataUrl] = useState<string | null>(null);
+  const [widePosterDataUrl, setWidePosterDataUrl] = useState<string | null>(null);
+  const [posterSize, setPosterSize] = useState<"story" | "wide">("story");
+  const [fitMode, setFitMode] = useState<"cover" | "contain">("cover");
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const storyStageRef = useRef<HTMLDivElement>(null);
+  const wideStageRef = useRef<HTMLDivElement>(null);
   const [titleLine1, setTitleLine1] = useState("EXCITED TO SHARE");
   const [titleLine2, setTitleLine2] = useState("MY FIRST WEBSITE!");
   const [customCaption, setCustomCaption] = useState(
@@ -234,8 +241,28 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
     reader.readAsDataURL(file);
   }
 
+  // Helper to generate a poster in the specified size
+  async function generatePosterForSize(
+    targetSize: "story" | "wide",
+    effectiveName: string,
+    l1: string,
+    l2: string
+  ): Promise<string> {
+    const stageEl = targetSize === "wide" ? wideStageRef.current : storyStageRef.current;
+    return await renderInstagramStoryPoster({
+      studentName: effectiveName,
+      websiteUrl: websiteUrl.trim(),
+      screenshotDataUrl: screenshotDataUrl,
+      stageElement: stageEl,
+      titleLine1: l1,
+      titleLine2: l2,
+      posterSize: targetSize,
+      fitMode: fitMode,
+    });
+  }
+
   // Generate Final Poster & Record Build
-  async function handleGeneratePoster(overrideLine1?: unknown, overrideLine2?: unknown) {
+  async function handleGeneratePoster(overrideLine1?: unknown, overrideLine2?: unknown, targetSize = posterSize) {
     setIsGeneratingPoster(true);
     try {
       const effectiveName = (typeof studentName === "string" ? studentName.trim() : "") || "DFB";
@@ -245,19 +272,26 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
       if (typeof overrideLine2 === "string" && overrideLine2.trim()) setTitleLine2(overrideLine2.trim());
 
       // Allow state update to propagate to offscreen stage DOM
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await new Promise((resolve) => setTimeout(resolve, 80));
 
-      // Render official 1080x1920 poster canvas
-      const generatedUrl = await renderInstagramStoryPoster({
-        studentName: effectiveName,
-        websiteUrl: websiteUrl.trim(),
-        screenshotDataUrl: screenshotDataUrl,
-        stageElement: stageRef.current,
-        titleLine1: l1,
-        titleLine2: l2,
-      });
+      const generatedUrl = await generatePosterForSize(targetSize, effectiveName, l1, l2);
 
+      if (targetSize === "wide") {
+        setWidePosterDataUrl(generatedUrl);
+      } else {
+        setStoryPosterDataUrl(generatedUrl);
+      }
       setPosterDataUrl(generatedUrl);
+      setPosterSize(targetSize);
+
+      // Pre-render the other size in background so switching is instant
+      const alternateSize = targetSize === "wide" ? "story" : "wide";
+      generatePosterForSize(alternateSize, effectiveName, l1, l2)
+        .then((altUrl) => {
+          if (alternateSize === "wide") setWidePosterDataUrl(altUrl);
+          else setStoryPosterDataUrl(altUrl);
+        })
+        .catch((err) => console.warn("[Background pre-render alternate poster size]", err));
 
       // Record build submission in backend
       try {
@@ -279,7 +313,11 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
       setCustomCaption(
         `Hey, I am ${effectiveName} and excited to share my first website! 🚀🔥\n\nCheck out my build: ${cleanUrl}\n\nSharing with @spark_iiitb!\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment`
       );
-      toast.success("Your Spark Club poster is ready! 🔥");
+      toast.success(
+        targetSize === "wide"
+          ? "Your Widescreen Showcase poster is ready! 🔥"
+          : "Your Spark Club Story poster is ready! 🔥"
+      );
     } catch (err) {
       console.error("[Poster Generation Error]", err);
       toast.error("Failed to generate poster. Please try again.");
@@ -288,29 +326,102 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
     }
   }
 
-  // Action: Download Poster
+  // Switch poster size on the review screen
+  async function handleSwitchPosterSize(newSize: "story" | "wide") {
+    if (newSize === posterSize) return;
+    setPosterSize(newSize);
+
+    const cached = newSize === "wide" ? widePosterDataUrl : storyPosterDataUrl;
+    if (cached) {
+      setPosterDataUrl(cached);
+      return;
+    }
+
+    setIsGeneratingPoster(true);
+    try {
+      const effectiveName = (typeof studentName === "string" ? studentName.trim() : "") || "DFB";
+      const generated = await generatePosterForSize(newSize, effectiveName, titleLine1, titleLine2);
+      if (newSize === "wide") setWidePosterDataUrl(generated);
+      else setStoryPosterDataUrl(generated);
+      setPosterDataUrl(generated);
+    } catch (err) {
+      console.error("[Switch Poster Size Error]", err);
+      toast.error("Could not render poster in that size.");
+    } finally {
+      setIsGeneratingPoster(false);
+    }
+  }
+
+  // Action: Download Poster (current active format)
   function handleDownloadPoster() {
-    if (!posterDataUrl) return;
+    const currentUrl = posterSize === "wide" ? widePosterDataUrl || posterDataUrl : storyPosterDataUrl || posterDataUrl;
+    if (!currentUrl) return;
     const cleanName = studentName.trim().toLowerCase().replace(/[^a-z0-9]/g, "-") || "spark";
-    const filename = `spark-drop-your-build-${cleanName}.png`;
+    const filename = posterSize === "wide"
+      ? `spark-showcase-${cleanName}-16x9.png`
+      : `spark-story-${cleanName}-9x16.png`;
 
     const link = document.createElement("a");
-    link.href = posterDataUrl;
+    link.href = currentUrl;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    toast.success("Poster downloaded! Check your downloads folder.");
+    toast.success(
+      posterSize === "wide"
+        ? "Wide Showcase poster downloaded (1920×1080)!"
+        : "Story poster downloaded (1080×1920)!"
+    );
+  }
+
+  // Action: Download Both Formats
+  async function handleDownloadBoth() {
+    const cleanName = studentName.trim().toLowerCase().replace(/[^a-z0-9]/g, "-") || "spark";
+    const effectiveName = (typeof studentName === "string" ? studentName.trim() : "") || "DFB";
+
+    let storyUrl = storyPosterDataUrl;
+    let wideUrl = widePosterDataUrl;
+
+    if (!storyUrl) {
+      storyUrl = await generatePosterForSize("story", effectiveName, titleLine1, titleLine2);
+      setStoryPosterDataUrl(storyUrl);
+    }
+    if (!wideUrl) {
+      wideUrl = await generatePosterForSize("wide", effectiveName, titleLine1, titleLine2);
+      setWidePosterDataUrl(wideUrl);
+    }
+
+    // Download Story
+    const link1 = document.createElement("a");
+    link1.href = storyUrl;
+    link1.download = `spark-story-${cleanName}-9x16.png`;
+    document.body.appendChild(link1);
+    link1.click();
+    document.body.removeChild(link1);
+
+    // Download Wide after small delay
+    setTimeout(() => {
+      const link2 = document.createElement("a");
+      link2.href = wideUrl!;
+      link2.download = `spark-showcase-${cleanName}-16x9.png`;
+      document.body.appendChild(link2);
+      link2.click();
+      document.body.removeChild(link2);
+      toast.success("Both posters downloaded (Story 9:16 + Wide 16:9)! 🔥");
+    }, 300);
   }
 
   // Action: Web Share API (native share on mobile)
   async function handleSharePoster() {
-    if (!posterDataUrl) return;
+    const currentUrl = posterSize === "wide" ? widePosterDataUrl || posterDataUrl : storyPosterDataUrl || posterDataUrl;
+    if (!currentUrl) return;
 
     const cleanName = studentName.trim().toLowerCase().replace(/[^a-z0-9]/g, "-") || "spark";
-    const filename = `spark-drop-your-build-${cleanName}.png`;
-    const file = dataUrlToFile(posterDataUrl, filename);
+    const filename = posterSize === "wide"
+      ? `spark-showcase-${cleanName}-16x9.png`
+      : `spark-story-${cleanName}-9x16.png`;
+    const file = dataUrlToFile(currentUrl, filename);
 
     if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -321,16 +432,14 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
         });
         toast.success("Shared successfully!");
       } catch (shareErr) {
-        // User cancelled or aborted
         if ((shareErr as Error).name !== "AbortError") {
           toast.error("Sharing was cancelled or unsupported on this device.");
         }
       }
     } else {
-      // Desktop / unsupported browser fallback
       handleDownloadPoster();
       toast.info(
-        "Direct image sharing is unsupported on this browser. Your poster has been downloaded—you can upload it to Instagram Stories!"
+        "Direct image sharing is unsupported on this browser. Your poster has been downloaded!"
       );
     }
   }
@@ -353,6 +462,10 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
     setScreenshotDataUrl(null);
     setCaptureError("");
     setPosterDataUrl(null);
+    setStoryPosterDataUrl(null);
+    setWidePosterDataUrl(null);
+    setPosterSize("story");
+    setFitMode("cover");
     setTitleLine1("EXCITED TO SHARE");
     setTitleLine2("MY FIRST WEBSITE!");
   }
@@ -708,9 +821,89 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                     />
                   </div>
 
-                  <p className="text-xs text-muted-foreground text-center">
-                    This snapshot will be placed inside the tilted Polaroid frame on your Instagram Story poster.
-                  </p>
+                  {/* Poster Size & Layout Selector */}
+                  <div className="rounded border-2 border-foreground/20 bg-muted/20 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold uppercase text-foreground flex items-center gap-1.5">
+                        <Sparkles className="size-3.5 text-secondary" /> Choose Poster Size & Layout
+                      </span>
+                    </div>
+
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setPosterSize("story")}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded border-2 p-3 text-left transition-all cursor-pointer",
+                          posterSize === "story"
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-foreground/20 hover:border-foreground/40 bg-background"
+                        )}
+                      >
+                        <Smartphone className={cn("size-5 mt-0.5 shrink-0", posterSize === "story" ? "text-primary" : "text-muted-foreground")} />
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-xs uppercase">Story Poster (9:16)</span>
+                            <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">Default</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Classic 1080×1920 Instagram Story with signature tilted Polaroid card.
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPosterSize("wide")}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded border-2 p-3 text-left transition-all cursor-pointer",
+                          posterSize === "wide"
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-foreground/20 hover:border-foreground/40 bg-background"
+                        )}
+                      >
+                        <Monitor className={cn("size-5 mt-0.5 shrink-0", posterSize === "wide" ? "text-primary" : "text-muted-foreground")} />
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-xs uppercase">Wide Showcase (16:9)</span>
+                            <span className="rounded bg-secondary/20 px-1.5 py-0.5 text-[9px] font-bold text-secondary">Full Website View</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Widescreen 1920×1080 desktop frame showing complete website without cropping.
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Fit Mode Toggle for Story format */}
+                    {posterSize === "story" && (
+                      <div className="pt-1 flex items-center justify-between text-[11px] border-t border-foreground/10">
+                        <span className="text-muted-foreground font-medium">Polaroid Website Fit:</span>
+                        <div className="flex items-center gap-1 bg-background rounded border border-foreground/20 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setFitMode("cover")}
+                            className={cn(
+                              "px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all",
+                              fitMode === "cover" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            Fill Frame (Default)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFitMode("contain")}
+                            className={cn(
+                              "px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all",
+                              fitMode === "contain" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            Fit Entire Website
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-foreground/15">
                     <Button type="button" variant="outline" onClick={() => setStep("form")}>
@@ -828,15 +1021,50 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
               <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start">
                 {/* Official Spark Club Poster Preview */}
                 <div className="flex flex-col items-center">
-                  <div className="relative w-full aspect-[9/16] max-w-[280px] overflow-hidden rounded-lg border-4 border-foreground bg-[#140A3A] shadow-[8px_8px_0_var(--foreground)]">
+                  {/* Size Switcher Tabs */}
+                  <div className="mb-3 inline-flex rounded-md border-2 border-foreground/20 bg-muted/40 p-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchPosterSize("story")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold uppercase transition-all cursor-pointer",
+                        posterSize === "story"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Smartphone className="size-3.5" /> Story (9:16)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchPosterSize("wide")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold uppercase transition-all cursor-pointer",
+                        posterSize === "wide"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Monitor className="size-3.5" /> Wide (16:9)
+                    </button>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "relative w-full overflow-hidden rounded-lg border-4 border-foreground bg-[#140A3A] shadow-[8px_8px_0_var(--foreground)] transition-all",
+                      posterSize === "wide"
+                        ? "aspect-[16/9] max-w-[380px]"
+                        : "aspect-[9/16] max-w-[270px]"
+                    )}
+                  >
                     <img
                       src={posterDataUrl}
-                      alt="Generated Spark Club Instagram Story Poster"
+                      alt={posterSize === "wide" ? "Generated Spark Club Wide Showcase Poster" : "Generated Spark Club Instagram Story Poster"}
                       className="size-full object-contain"
                     />
                   </div>
-                  <p className="mt-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Official 1080 × 1920 Instagram Story
+                  <p className="mt-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center">
+                    {posterSize === "wide" ? "Official 1920 × 1080 Wide Showcase" : "Official 1080 × 1920 Instagram Story"}
                   </p>
                 </div>
 
@@ -848,7 +1076,9 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                     </div>
                     <h4 className="mt-1 font-display text-2xl uppercase">Your Poster Is Live!</h4>
                     <p className="text-xs text-muted-foreground">
-                      Download the poster to share on your Instagram Story or share directly to your favorite apps.
+                      {posterSize === "wide"
+                        ? "Widescreen 16:9 poster showing your complete website, perfect for LinkedIn, Twitter, Discord, and desktop displays."
+                        : "Download the poster to share on your Instagram Story or share directly to your favorite apps."}
                     </p>
                   </div>
 
@@ -861,7 +1091,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                       onClick={handleDownloadPoster}
                       className="font-extrabold uppercase shadow-[3px_3px_0_var(--foreground)]"
                     >
-                      <Download className="mr-2 size-4" /> Download PNG
+                      <Download className="mr-2 size-4" /> {posterSize === "wide" ? "Download 16:9 PNG" : "Download 9:16 PNG"}
                     </Button>
 
                     <Button
@@ -871,9 +1101,20 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                       onClick={handleSharePoster}
                       className="border-2 border-foreground font-extrabold uppercase shadow-[3px_3px_0_var(--foreground)]"
                     >
-                      <Share2 className="mr-2 size-4 text-primary" /> Share to Story
+                      <Share2 className="mr-2 size-4 text-primary" /> Share Poster
                     </Button>
                   </div>
+
+                  {/* Download Both Formats Button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadBoth}
+                    className="w-full border-foreground/30 font-bold uppercase text-xs hover:bg-muted"
+                  >
+                    <Layers className="mr-1.5 size-3.5 text-secondary" /> Download Both (Story 9:16 + Wide 16:9)
+                  </Button>
 
                   {/* Customize Poster Text */}
                   <div className="rounded border border-foreground/20 bg-background p-3.5 space-y-2.5">
@@ -1020,7 +1261,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
           )}
         </div>
 
-        {/* Offscreen 1080x1920 Stage for DOM rasterization via html-to-image */}
+        {/* Offscreen 1080x1920 Story Stage for DOM rasterization via html-to-image */}
         <div
           style={{
             position: "fixed",
@@ -1036,8 +1277,34 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
           aria-hidden="true"
         >
           <SparkStoryStage
-            ref={stageRef}
+            ref={storyStageRef}
             studentName={studentName.trim() || "DFB"}
+            screenshotUrl={screenshotDataUrl}
+            titleLine1={titleLine1}
+            titleLine2={titleLine2}
+            fitMode={fitMode}
+          />
+        </div>
+
+        {/* Offscreen 1920x1080 Wide Showcase Stage for DOM rasterization via html-to-image */}
+        <div
+          style={{
+            position: "fixed",
+            left: "-9999px",
+            top: "-9999px",
+            width: "1920px",
+            height: "1080px",
+            pointerEvents: "none",
+            opacity: 0,
+            overflow: "hidden",
+            zIndex: -99,
+          }}
+          aria-hidden="true"
+        >
+          <SparkWideStage
+            ref={wideStageRef}
+            studentName={studentName.trim() || "DFB"}
+            websiteUrl={websiteUrl.trim()}
             screenshotUrl={screenshotDataUrl}
             titleLine1={titleLine1}
             titleLine2={titleLine2}

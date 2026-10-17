@@ -7,7 +7,10 @@ export interface SparkStoryStageProps extends HTMLAttributes<HTMLDivElement> {
   scale?: number;
   titleLine1?: string;
   titleLine2?: string;
+  fitMode?: "cover" | "contain";
 }
+
+export { SparkWideStage, type SparkWideStageProps } from "./spark-wide-stage";
 
 /**
  * Exact 1080 × 1920 Instagram Story Poster Stage
@@ -15,7 +18,7 @@ export interface SparkStoryStageProps extends HTMLAttributes<HTMLDivElement> {
  */
 export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
   function SparkStoryStage(
-    { studentName, screenshotUrl, scale = 1, titleLine1, titleLine2, className, style, ...props },
+    { studentName, screenshotUrl, scale = 1, titleLine1, titleLine2, fitMode = "cover", className, style, ...props },
     ref
   ) {
     // Sanitize and format name: default "DFB", max 24 chars
@@ -352,8 +355,8 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
                   style={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "top center",
+                    objectFit: fitMode === "contain" ? "contain" : "cover",
+                    objectPosition: fitMode === "contain" ? "center" : "top center",
                     display: "block",
                   }}
                 />

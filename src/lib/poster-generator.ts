@@ -25,6 +25,8 @@ export interface PosterOptions {
   stageElement?: HTMLElement | null;
   titleLine1?: string;
   titleLine2?: string;
+  posterSize?: "story" | "wide";
+  fitMode?: "cover" | "contain";
 }
 
 /**
@@ -56,23 +58,28 @@ export async function ensureFontsLoaded(): Promise<void> {
 }
 
 /**
- * Renders the official 1080×1920 Instagram Story Poster.
- * First tries high-fidelity DOM rasterization via html-to-image from the live SparkStoryStage;
+ * Renders the official Spark Club Poster (1080×1920 Story or 1920×1080 Wide Showcase).
+ * First tries high-fidelity DOM rasterization via html-to-image from the live SparkStage;
  * if unavailable, falls back to direct Canvas 2D pixel-exact rendering.
  */
 export async function renderInstagramStoryPoster(options: PosterOptions): Promise<string> {
   await ensureFontsLoaded();
 
+  const isWide = options.posterSize === "wide";
+  const targetWidth = isWide ? 1920 : 1080;
+  const targetHeight = isWide ? 1080 : 1920;
+  const defaultCanvasId = isWide ? "spark-wide-canvas" : "spark-story-canvas";
+
   // 1. Attempt client-side html-to-image from the active DOM stage if available
   const targetElement =
     options.stageElement ||
-    (typeof document !== "undefined" ? (document.getElementById("spark-story-canvas") as HTMLElement) : null);
+    (typeof document !== "undefined" ? (document.getElementById(defaultCanvasId) as HTMLElement) : null);
 
   if (targetElement) {
     try {
       const dataUrl = await toPng(targetElement, {
-        width: 1080,
-        height: 1920,
+        width: targetWidth,
+        height: targetHeight,
         pixelRatio: 1,
         cacheBust: false,
         skipFonts: true,
@@ -93,6 +100,10 @@ export async function renderInstagramStoryPoster(options: PosterOptions): Promis
  * Direct Canvas 2D implementation matching the exact mathematical coordinates
  */
 async function renderCanvas2D(options: PosterOptions): Promise<string> {
+  if (options.posterSize === "wide") {
+    return renderWideCanvas2D(options);
+  }
+
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;
@@ -365,6 +376,219 @@ async function renderCanvas2D(options: PosterOptions): Promise<string> {
 
   ctx.restore();
 
+  return canvas.toDataURL("image/png");
+}
+
+/**
+ * Direct Canvas 2D implementation for 1920×1080 Wide Showcase Poster
+ */
+async function renderWideCanvas2D(options: PosterOptions): Promise<string> {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1920;
+  canvas.height = 1080;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to initialize canvas 2D rendering context.");
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // 1. Background #140A3A
+  ctx.fillStyle = "#140A3A";
+  ctx.fillRect(0, 0, 1920, 1080);
+
+  // 2. Letters
+  ctx.font = "270px 'Anton', Impact, sans-serif";
+  ctx.textBaseline = "top";
+  const bgRows = [
+    { text: "SEARCH FOR SPARK", y: 10, x: -20, colors: ["#6238F5", "#2C1478", "#6238F5", "#E8307A", "#2C1478", "#6238F5", "#2C1478", "#6238F5", "#2C1478", "#E8307A", "#6238F5", "#2C1478", "#6238F5", "#2C1478"] },
+    { text: "FOR SPARK SEARCH", y: 370, x: -120, colors: ["#2C1478", "#6238F5", "#2C1478", "#E8307A", "#6238F5", "#2C1478", "#6238F5", "#2C1478", "#6238F5", "#2C1478", "#6238F5", "#E8307A", "#2C1478", "#6238F5"] },
+    { text: "SPARK FOR SEARCH", y: 730, x: -50, colors: ["#6238F5", "#2C1478", "#E8307A", "#6238F5", "#C5E800", "#2C1478", "#6238F5", "#2C1478", "#6238F5", "#2C1478", "#E8307A", "#6238F5", "#2C1478", "#6238F5"] },
+  ];
+  for (const row of bgRows) {
+    let curX = row.x;
+    for (let i = 0; i < row.text.length; i++) {
+      const char = row.text[i];
+      ctx.fillStyle = row.colors[i % row.colors.length] || "#6238F5";
+      ctx.fillText(char, curX, row.y);
+      const metrics = ctx.measureText(char);
+      curX += metrics.width - 6;
+    }
+  }
+
+  // Vignette
+  const vigGrad = ctx.createRadialGradient(960, 540, 400, 960, 540, 960);
+  vigGrad.addColorStop(0, "rgba(20, 10, 58, 0)");
+  vigGrad.addColorStop(0.5, "rgba(20, 10, 58, 0)");
+  vigGrad.addColorStop(1, "rgba(8, 3, 28, 0.5)");
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(0, 0, 1920, 1080);
+
+  let logoImg: HTMLImageElement | null = null;
+  try {
+    logoImg = await loadImage(sparkLogoUrl);
+  } catch (err) {
+    console.warn("Could not load logo", err);
+  }
+
+  // Peeking card top right
+  ctx.save();
+  ctx.translate(1820, 240);
+  ctx.rotate((4 * Math.PI) / 180);
+  drawPeekingCard(ctx, logoImg, 230, 0.14, 0.30);
+  ctx.restore();
+
+  // Peeking card bottom left
+  ctx.save();
+  ctx.translate(-20, 920);
+  ctx.rotate((-5 * Math.PI) / 180);
+  drawPeekingCard(ctx, logoImg, 160, 0.22, 0.27);
+  ctx.restore();
+
+  // Main Card: 1540x910, centered at (960, 540), rotated -1.2deg
+  ctx.save();
+  ctx.translate(960, 540);
+  ctx.rotate((-1.2 * Math.PI) / 180);
+
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = 70;
+  ctx.shadowOffsetX = 18;
+  ctx.shadowOffsetY = 28;
+
+  const cardW = 1540;
+  const cardH = 910;
+  const cardLeft = -cardW / 2;
+  const cardTop = -cardH / 2;
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(cardLeft, cardTop, cardW, cardH);
+
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  // Frame: 1490 x 710
+  const frameX = cardLeft + 25;
+  const frameY = cardTop + 25;
+  const frameW = 1490;
+  const frameH = 710;
+
+  // Window header
+  ctx.fillStyle = "#1C1138";
+  ctx.fillRect(frameX, frameY, frameW, 44);
+
+  // Dots
+  ctx.fillStyle = "#FF5F56";
+  ctx.beginPath();
+  ctx.arc(frameX + 24, frameY + 22, 6.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#FFBD2E";
+  ctx.beginPath();
+  ctx.arc(frameX + 44, frameY + 22, 6.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#27C93F";
+  ctx.beginPath();
+  ctx.arc(frameX + 64, frameY + 22, 6.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Address capsule
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.lineWidth = 1;
+  const capW = 500;
+  const capH = 26;
+  const capX = frameX + (frameW - capW) / 2;
+  const capY = frameY + 9;
+  ctx.beginPath();
+  ctx.roundRect(capX, capY, capW, capH, 13);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font = "600 13px 'Inter', monospace, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const rawUrl = options.websiteUrl || "spark-build-station.vercel.app";
+  let displayUrl = rawUrl;
+  try {
+    const parsed = new URL(rawUrl);
+    displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
+  } catch {}
+  ctx.fillText(displayUrl.slice(0, 48), capX + capW / 2, capY + capH / 2);
+
+  // Frame viewport
+  const viewY = frameY + 44;
+  const viewH = frameH - 44;
+
+  let drawn = false;
+  if (options.screenshotDataUrl) {
+    try {
+      const siteImg = await loadImage(options.screenshotDataUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(frameX, viewY, frameW, viewH);
+      ctx.clip();
+      ctx.drawImage(siteImg, frameX, viewY, frameW, viewH);
+      ctx.restore();
+      drawn = true;
+    } catch {}
+  }
+  if (!drawn) {
+    ctx.fillStyle = "#6238F5";
+    ctx.fillRect(frameX, viewY, frameW, viewH);
+    if (logoImg) {
+      const lw = 320;
+      const lh = lw * (logoImg.height / logoImg.width);
+      ctx.drawImage(logoImg, frameX + (frameW - lw) / 2, viewY + (viewH - lh) / 2, lw, lh);
+    }
+  }
+
+  // Name tag
+  const nameX = cardLeft + 25;
+  const nameY = cardTop + 750;
+  const nameH = 60;
+  const nameW = 380;
+  ctx.fillStyle = "#C5E800";
+  ctx.fillRect(nameX, nameY, nameW, nameH);
+
+  const rawName = (options.studentName || "DFB").trim().toUpperCase() || "DFB";
+  ctx.font = "40px 'Anton', Impact, sans-serif";
+  ctx.fillStyle = "#0E0A18";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`HEY, I AM ${rawName.slice(0, 24)}`, nameX + nameW / 2, nameY + nameH / 2 + 2);
+
+  // Headline
+  const line1 = (options.titleLine1 || "EXCITED TO SHARE").trim().toUpperCase();
+  const line2 = (options.titleLine2 || "MY FIRST WEBSITE!").trim().toUpperCase();
+  ctx.font = "48px 'Anton', Impact, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#0E0A18";
+  ctx.fillText(`${line1} — ${line2}`, nameX, cardTop + 865);
+
+  // Right badges
+  const badgeRight = cardLeft + cardW - 25;
+  const badgeY = cardTop + 765;
+  ctx.fillStyle = "#0E0A18";
+  ctx.fillRect(badgeRight - 470, badgeY, 250, 56);
+  ctx.font = "800 24px 'Inter', system-ui, sans-serif";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("SPARK CLUB", badgeRight - 470 + 125, badgeY + 28);
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(badgeRight - 206, badgeY, 190, 56);
+  ctx.strokeStyle = "#0E0A18";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(badgeRight - 206, badgeY, 190, 56);
+  ctx.fillStyle = "#0E0A18";
+  ctx.fillText("26-27 TEAM", badgeRight - 206 + 95, badgeY + 28);
+
+  ctx.restore();
   return canvas.toDataURL("image/png");
 }
 
