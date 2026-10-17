@@ -98,10 +98,56 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
 
     const targetUrl = safetyCheck.url.toString();
 
-    // Provider endpoints (Microlink API & WordPress mShots fallback)
+    // 1. Attempt Playwright headless browser capture (720:870 aspect ratio = 1200x1450 @ 2x)
+    try {
+      const { chromium } = await import("playwright");
+      // Try msedge on Windows, or chrome, or standard chromium
+      let browser;
+      try {
+        browser = await chromium.launch({ channel: "msedge", timeout: 6000 });
+      } catch {
+        try {
+          browser = await chromium.launch({ channel: "chrome", timeout: 6000 });
+        } catch {
+          browser = await chromium.launch({ timeout: 6000 });
+        }
+      }
+
+      if (browser) {
+        const context = await browser.newContext({
+          viewport: { width: 1200, height: 1450 },
+          deviceScaleFactor: 2,
+          userAgent:
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 SparkClub/1.0",
+        });
+        const page = await context.newPage();
+        page.setDefaultTimeout(8000);
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 8000 });
+        await page.waitForTimeout(500); // Allow brief hydration
+
+        const buffer = await page.screenshot({
+          type: "png",
+          fullPage: false,
+        });
+
+        await browser.close();
+
+        if (buffer && buffer.byteLength > 1000) {
+          const base64 = buffer.toString("base64");
+          return {
+            success: true,
+            dataUrl: `data:image/png;base64,${base64}`,
+          };
+        }
+      }
+    } catch (pwErr) {
+      console.warn("[Playwright direct capture fallback]", pwErr);
+    }
+
+    // 2. High-availability external screenshot providers (1200x1450, 720:870 aspect ratio)
     const providers = [
-      `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=1280&h=800`,
-      `https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&screenshot=true&meta=false&embed=screenshot.url`,
+      `https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1200&viewport.height=1450&viewport.deviceScaleFactor=2`,
+      `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=1200&h=1450`,
     ];
 
     for (const providerUrl of providers) {

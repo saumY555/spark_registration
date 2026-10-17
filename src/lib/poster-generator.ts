@@ -1,24 +1,28 @@
 /**
  * Spark Club - Drop Your Build
- * Instagram Story Poster Generator (1080 × 1920 px, 9:16 portrait)
+ * Official Instagram Story Poster Generator (1080 × 1920 px, 9:16 portrait)
  *
- * Implements the official Spark Club visual language:
- * - Full-height 1080 × 1920 canvas filling all story space
- * - Deep space violet/navy gradient background with custom background typography ("SEARCH FOR SPARK")
- * - Top-right & bottom-left pink Polaroid photo elements with drop shadows
- * - Enlarged central white Polaroid frame with ample margin so screenshots never surpass the frame
- * - Website screenshot preview (or neon branded developer terminal fallback if skipped)
- * - Dashed stitch line & neon lime masking tape sticker
- * - "Hey, I am [Student Name]" + "and excited to share my first website! 🚀"
- * - Live site link pill
- * - Club pill header & @spark_iiitb Instagram tag footer
+ * Exact 1:1 recreation of the official Spark Club reference image:
+ * - 1080 × 1920 fixed canvas, background #140A3A
+ * - 5 rows of giant Anton background letters ("SEARCH", "FORSPARK", "SEARCH", "FORSPARK", "SPARKFOR")
+ * - Vignette overlay
+ * - Peeking pink cards with Spark brand lockup at (-4deg and -5deg)
+ * - Main white card 780 × 1260 rotated -3.5deg
+ * - 720 × 870 photo frame: screenshot object-fit cover (or gradient + dashed stitch guide fallback)
+ * - Lime tag (#C5E800): "HEY, I AM " + NAME (default "DFB")
+ * - Title: "EXCITED TO SHARE" + "MY FIRST WEBSITE!" (#6238F5)
+ * - Bottom bars: "SPARK CLUB" (black) and "26-27 TEAM" (white with 4px border)
+ * - Zero extra labels, pills, or footers
  */
 
+import { toPng } from "html-to-image";
+import sparkLogoUrl from "@/assets/spark_logo_transparent.png";
+
 export interface PosterOptions {
-  studentName: string;
-  websiteUrl: string;
+  studentName?: string;
+  websiteUrl?: string;
   screenshotDataUrl?: string | null;
-  mode?: "story" | "poster";
+  stageElement?: HTMLElement | null;
 }
 
 /**
@@ -35,56 +39,59 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Helper to draw a rounded rectangle path
+ * Waits for fonts to be loaded before rendering
  */
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
-
-/**
- * Renders the official 1080×1920 Instagram Story Poster on an offscreen HTML5 canvas
- * and returns the high-resolution PNG data URL.
- */
-export async function renderInstagramStoryPoster(options: PosterOptions): Promise<string> {
-  // Wait for Google Fonts to be ready
+export async function ensureFontsLoaded(): Promise<void> {
   if (typeof document !== "undefined" && document.fonts) {
     try {
       await document.fonts.ready;
     } catch {
-      // Continue even if font loading times out
+      // Continue even if font wait times out
+    }
+  }
+}
+
+/**
+ * Renders the official 1080×1920 Instagram Story Poster.
+ * First tries high-fidelity DOM rasterization via html-to-image from the live SparkStoryStage;
+ * if unavailable, falls back to direct Canvas 2D pixel-exact rendering.
+ */
+export async function renderInstagramStoryPoster(options: PosterOptions): Promise<string> {
+  await ensureFontsLoaded();
+
+  // 1. Attempt client-side html-to-image from the active DOM stage if available
+  const targetElement =
+    options.stageElement ||
+    (typeof document !== "undefined" ? (document.getElementById("spark-story-canvas") as HTMLElement) : null);
+
+  if (targetElement) {
+    try {
+      const dataUrl = await toPng(targetElement, {
+        width: 1080,
+        height: 1920,
+        pixelRatio: 1,
+        cacheBust: false,
+        skipFonts: false,
+      });
+      if (dataUrl && dataUrl.startsWith("data:image/png")) {
+        return dataUrl;
+      }
+    } catch (domErr) {
+      console.warn("[html-to-image fallback to Canvas 2D]", domErr);
     }
   }
 
+  // 2. Direct Canvas 2D rendering matching the exact specification
+  return renderCanvas2D(options);
+}
+
+/**
+ * Direct Canvas 2D implementation matching the exact mathematical coordinates
+ */
+async function renderCanvas2D(options: PosterOptions): Promise<string> {
   const canvas = document.createElement("canvas");
-  const isPosterMaster = options.mode === "poster";
-
-  if (isPosterMaster) {
-    // 925 × 1024 master aspect (scaled 2x retina)
-    canvas.width = 1850;
-    canvas.height = 2048;
-  } else {
-    // Default: 1080 × 1920 Instagram Story (uses all vertical spaces)
-    canvas.width = 1080;
-    canvas.height = 1920;
-  }
-
+  canvas.width = 1080;
+  canvas.height = 1920;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("Unable to initialize canvas 2D rendering context.");
@@ -93,346 +100,287 @@ export async function renderInstagramStoryPoster(options: PosterOptions): Promis
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  if (isPosterMaster) {
-    ctx.save();
-    ctx.scale(2, 2);
-    await drawStoryCanvas(ctx, options, 925, 1024, true);
-    ctx.restore();
-  } else {
-    await drawStoryCanvas(ctx, options, 1080, 1920, false);
+  // 1. Canvas Background: #140A3A
+  ctx.fillStyle = "#140A3A";
+  ctx.fillRect(0, 0, 1080, 1920);
+
+  // 2. Background letters: Anton uppercase ~395px, line-height 1, letter-spacing: -10px
+  const bgRows = [
+    {
+      text: "SEARCH",
+      y: 10,
+      x: -20,
+      colors: ["#6238F5", "#2C1478", "#6238F5", "#E8307A", "#2C1478", "#6238F5"],
+    },
+    {
+      text: "FORSPARK",
+      y: 395,
+      x: -140,
+      colors: ["#2C1478", "#6238F5", "#2C1478", "#E8307A", "#6238F5", "#2C1478", "#6238F5", "#2C1478"],
+    },
+    {
+      text: "SEARCH",
+      y: 780,
+      x: -60,
+      colors: ["#6238F5", "#2C1478", "#E8307A", "#6238F5", "#2C1478", "#6238F5"],
+    },
+    {
+      text: "FORSPARK",
+      y: 1165,
+      x: -190,
+      colors: ["#6238F5", "#2C1478", "#6238F5", "#2C1478", "#6238F5", "#E8307A", "#2C1478", "#6238F5"],
+    },
+    {
+      text: "SPARKFOR",
+      y: 1550,
+      x: -40,
+      colors: ["#6238F5", "#2C1478", "#E8307A", "#6238F5", "#C5E800", "#2C1478", "#6238F5", "#2C1478"],
+    },
+  ];
+
+  ctx.font = "395px 'Anton', Impact, sans-serif";
+  ctx.textBaseline = "top";
+
+  for (const row of bgRows) {
+    let curX = row.x;
+    for (let i = 0; i < row.text.length; i++) {
+      const char = row.text[i];
+      ctx.fillStyle = row.colors[i];
+      ctx.fillText(char, curX, row.y);
+      const metrics = ctx.measureText(char);
+      curX += metrics.width - 10; // Tight letter-spacing
+    }
   }
 
-  return canvas.toDataURL("image/png");
-}
+  // Soft vignette overlay: edges darkened toward #08031C (35% strength)
+  const vigGrad = ctx.createRadialGradient(540, 960, 400, 540, 960, 960);
+  vigGrad.addColorStop(0, "rgba(20, 10, 58, 0)");
+  vigGrad.addColorStop(0.5, "rgba(20, 10, 58, 0)");
+  vigGrad.addColorStop(1, "rgba(8, 3, 28, 0.45)");
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(0, 0, 1080, 1920);
 
-/**
- * Draws the complete Instagram Story layout
- */
-async function drawStoryCanvas(
-  ctx: CanvasRenderingContext2D,
-  options: PosterOptions,
-  w: number,
-  h: number,
-  compactMode: boolean
-) {
-  // 1. Deep Space Violet/Navy Gradient Background
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-  bgGrad.addColorStop(0, "#09071c");
-  bgGrad.addColorStop(0.3, "#110b30");
-  bgGrad.addColorStop(0.7, "#160e3d");
-  bgGrad.addColorStop(1, "#070517");
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, w, h);
-
-  // Center alignment helper
-  const sfCenter = (text: string, x: number, y: number) => {
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, x, y);
-  };
-
-  // 2. Background Typographic Graphics: "SEARCH FOR SPARK"
-  if (!compactMode) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    // Top: "SEARCH" (Electric Violet/Blue)
-    ctx.font = "900 145px 'Anton', 'Bebas Neue', Impact, sans-serif";
-    ctx.fillStyle = "rgba(80, 50, 235, 0.72)";
-    ctx.fillText("SEARCH", 540, 245);
-
-    // Middle: "FOR" (subtle electric indigo behind the Polaroid)
-    ctx.font = "900 130px 'Anton', 'Bebas Neue', Impact, sans-serif";
-    ctx.fillStyle = "rgba(65, 40, 200, 0.45)";
-    ctx.fillText("FOR", 540, 670);
-
-    // Bottom: "S P A R K" with signature club colors
-    ctx.font = "900 150px 'Anton', 'Bebas Neue', Impact, sans-serif";
-
-    // S (Electric Violet)
-    ctx.fillStyle = "rgba(124, 58, 237, 0.85)";
-    ctx.fillText("S", 190, 1680);
-
-    // P (Hot Pink)
-    ctx.fillStyle = "rgba(236, 72, 153, 0.9)";
-    ctx.fillText("P", 365, 1680);
-
-    // A (Coral/Red)
-    ctx.fillStyle = "rgba(244, 63, 94, 0.9)";
-    ctx.fillText("A", 540, 1680);
-
-    // R (Purple)
-    ctx.fillStyle = "rgba(139, 92, 246, 0.85)";
-    ctx.fillText("R", 715, 1680);
-
-    // K (Neon Lime)
-    ctx.fillStyle = "rgba(204, 255, 0, 0.95)";
-    ctx.fillText("K", 890, 1680);
-
-    ctx.restore();
-
-    // Top-Right Tilted Pink Polaroid Card
-    ctx.save();
-    ctx.translate(960, 140);
-    ctx.rotate((14 * Math.PI) / 180);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-    ctx.fillRect(-80, -100, 180, 220);
-    ctx.fillStyle = "#FFFFFF";
-    roundRect(ctx, -90, -110, 180, 220, 4);
-    ctx.fill();
-    ctx.fillStyle = "#EC4899"; // Hot pink
-    ctx.fillRect(-78, -98, 156, 156);
-    ctx.restore();
-
-    // Bottom-Left Tilted Coral Polaroid Card
-    ctx.save();
-    ctx.translate(80, 1800);
-    ctx.rotate((-12 * Math.PI) / 180);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-    ctx.fillRect(-90, -110, 200, 240);
-    ctx.fillStyle = "#FFFFFF";
-    roundRect(ctx, -100, -120, 200, 240, 4);
-    ctx.fill();
-    ctx.fillStyle = "#F43F5E"; // Coral
-    ctx.fillRect(-88, -108, 176, 170);
-    ctx.restore();
+  // Load Spark Logo for peeking cards
+  let logoImg: HTMLImageElement | null = null;
+  try {
+    logoImg = await loadImage(sparkLogoUrl);
+  } catch (err) {
+    console.warn("Could not load logo for peeking cards", err);
   }
 
-  // 3. ENLARGED WHITE POLAROID FRAME (The Hero Element)
-  // Generous proportions, centered with a slight tilt
-  const cardW = compactMode ? 660 : 840;
-  const cardH = compactMode ? 860 : 1120;
-  const cardCenterX = compactMode ? w / 2 : 540;
-  const cardCenterY = compactMode ? h / 2 : 960;
-  const cardAngle = (-3.5 * Math.PI) / 180;
-
+  // 4. Peeking Pink Cards (drawn after letters, before main card)
+  // Top-right card: center at (1050, 330), rotated -4deg
   ctx.save();
-  ctx.translate(cardCenterX, cardCenterY);
-  ctx.rotate(cardAngle);
+  ctx.translate(1050, 330);
+  ctx.rotate((-4 * Math.PI) / 180);
+  drawPeekingCard(ctx, logoImg, 250, 0.14, 0.30);
+  ctx.restore();
 
-  // Physical paper drop shadow
+  // Bottom-left card: center at (10, 1500), rotated -5deg
+  ctx.save();
+  ctx.translate(10, 1500);
+  ctx.rotate((-5 * Math.PI) / 180);
+  drawPeekingCard(ctx, logoImg, 175, 0.22, 0.27);
+  ctx.restore();
+
+  // 3. Main White Card: 780x1260, centered at (540, 960), rotated -3.5deg
+  ctx.save();
+  ctx.translate(540, 960);
+  ctx.rotate((-3.5 * Math.PI) / 180);
+
+  // Shadow: box-shadow 16px 26px 60px rgba(0,0,0,0.55)
   ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
-  ctx.shadowBlur = 32;
-  ctx.shadowOffsetX = 12;
-  ctx.shadowOffsetY = 20;
+  ctx.shadowBlur = 60;
+  ctx.shadowOffsetX = 16;
+  ctx.shadowOffsetY = 26;
 
-  // White Polaroid Paper Frame
+  // White Card body: centered at (0, 0), so left is -390, top is -630
+  const cardLeft = -390;
+  const cardTop = -630;
   ctx.fillStyle = "#FFFFFF";
-  roundRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 8);
-  ctx.fill();
+  ctx.fillRect(cardLeft, cardTop, 780, 1260);
 
-  // Reset shadow for inner elements
+  // Clear shadow for internal elements
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
 
-  // Inner Photo Cutout Container
-  // 45px white margins on left/right/top -> SCREENSHOT NEVER OVERFLOWS!
-  const margin = compactMode ? 36 : 45;
-  const photoX = -cardW / 2 + margin;
-  const photoY = -cardH / 2 + margin;
-  const photoW = cardW - margin * 2; // 750px (in story mode)
-  const photoH = compactMode ? 490 : 640; // 640px (in story mode)
+  // 3a. Photo frame: left 30, top 30, width 720, height 870
+  const frameX = cardLeft + 30;
+  const frameY = cardTop + 30;
+  const frameW = 720;
+  const frameH = 870;
 
-  // Clip to photo cutout with rounded corners
-  ctx.save();
-  roundRect(ctx, photoX, photoY, photoW, photoH, 4);
-  ctx.clip();
-
-  // Draw Screenshot OR Branded Developer Terminal Fallback
-  let imageDrawn = false;
+  let screenshotDrawn = false;
   if (options.screenshotDataUrl) {
     try {
       const siteImg = await loadImage(options.screenshotDataUrl);
-      const imgAspect = siteImg.width / siteImg.height;
-      const targetAspect = photoW / photoH;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(frameX, frameY, frameW, frameH);
+      ctx.clip();
 
-      let drawW = photoW;
-      let drawH = photoH;
-      let drawX = photoX;
-      let drawY = photoY;
+      const imgAspect = siteImg.width / siteImg.height;
+      const targetAspect = frameW / frameH;
+      let drawW = frameW;
+      let drawH = frameH;
+      let drawX = frameX;
+      let drawY = frameY;
 
       if (imgAspect > targetAspect) {
-        // Wider than frame: fit height, center horizontally
-        drawW = photoH * imgAspect;
-        drawX = photoX - (drawW - photoW) / 2;
+        drawW = frameH * imgAspect;
+        drawX = frameX - (drawW - frameW) / 2;
       } else {
-        // Taller than frame: fit width, align to top to showcase website hero/header
-        drawH = photoW / imgAspect;
-        drawY = photoY;
+        drawH = frameW / imgAspect;
+        drawY = frameY; // Align to top
       }
 
       ctx.drawImage(siteImg, drawX, drawY, drawW, drawH);
-      imageDrawn = true;
-    } catch (e) {
-      console.warn("Screenshot rendering failed, using branded terminal", e);
-      imageDrawn = false;
+      ctx.restore();
+      screenshotDrawn = true;
+    } catch {
+      screenshotDrawn = false;
     }
   }
 
-  // Branded Terminal Graphic if screenshot is skipped or failed
-  if (!imageDrawn) {
-    const termGrad = ctx.createLinearGradient(photoX, photoY, photoX + photoW, photoY + photoH);
-    termGrad.addColorStop(0, "#150D32");
-    termGrad.addColorStop(1, "#231454");
-    ctx.fillStyle = termGrad;
-    ctx.fillRect(photoX, photoY, photoW, photoH);
+  // Placeholder gradient + dashed stitch guide if no screenshot
+  if (!screenshotDrawn) {
+    const frameGrad = ctx.createLinearGradient(frameX, frameY, frameX, frameY + frameH);
+    frameGrad.addColorStop(0, "#6238F5");
+    frameGrad.addColorStop(1, "#9E2EB9");
+    ctx.fillStyle = frameGrad;
+    ctx.fillRect(frameX, frameY, frameW, frameH);
 
-    // Browser header bar
-    ctx.fillStyle = "#1E1442";
-    ctx.fillRect(photoX, photoY, photoW, 42);
-
-    // Control dots
-    ctx.fillStyle = "#EF4444";
-    ctx.beginPath();
-    ctx.arc(photoX + 20, photoY + 21, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#F59E0B";
-    ctx.beginPath();
-    ctx.arc(photoX + 40, photoY + 21, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#10B981";
-    ctx.beginPath();
-    ctx.arc(photoX + 60, photoY + 21, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Address bar pill
-    ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
-    roundRect(ctx, photoX + 85, photoY + 10, photoW - 110, 22, 6);
-    ctx.fill();
-
-    let displayDomain = options.websiteUrl.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-    if (displayDomain.length > 36) displayDomain = displayDomain.slice(0, 34) + "…";
-
-    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
-    ctx.font = "600 11px 'Manrope', monospace, sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(displayDomain || "my-first-site.vercel.app", photoX + 98, photoY + 21);
-
-    // Center Graphic
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#CCFF00"; // Neon Lime
-    ctx.font = "900 76px 'Anton', 'Bebas Neue', monospace";
-    ctx.fillText("⚡ </> ⚡", photoX + photoW / 2, photoY + 210);
-
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "900 44px 'Anton', 'Bebas Neue', sans-serif";
-    ctx.fillText("MY FIRST WEBSITE", photoX + photoW / 2, photoY + 290);
-
-    ctx.fillStyle = "#C4B5FD";
-    ctx.font = "800 20px 'Barlow Condensed', 'Manrope', sans-serif";
-    ctx.fillText("BUILT & DEPLOYED LIVE", photoX + photoW / 2, photoY + 340);
-
-    // Spark Club Builder Badge
-    ctx.fillStyle = "rgba(204, 255, 0, 0.15)";
-    roundRect(ctx, photoX + photoW / 2 - 120, photoY + 380, 240, 40, 20);
-    ctx.fill();
-    ctx.strokeStyle = "#CCFF00";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = "#CCFF00";
-    ctx.font = "800 14px 'Manrope', sans-serif";
-    ctx.fillText("SPARK CLUB BUILDER", photoX + photoW / 2, photoY + 400);
+    // Dashed stitch line guide: inset 16px, 14px dash, 10px gap
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([14, 10]);
+    ctx.strokeRect(frameX + 16, frameY + 16, frameW - 32, frameH - 32);
+    ctx.restore();
   }
 
-  // Dashed Stitch Border (inside the photo cutout)
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([14, 10]);
-  roundRect(ctx, photoX + 16, photoY + 16, photoW - 32, photoH - 32, 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  // 3b. Lime name tag: x=200 to 580 (width 380), y=870 to 936 (height 66), background #C5E800
+  const tagX = cardLeft + 200;
+  const tagY = cardTop + 870;
+  const tagW = 380;
+  const tagH = 66;
 
-  ctx.restore(); // Restore photo clip
+  ctx.fillStyle = "#C5E800";
+  ctx.fillRect(tagX, tagY, tagW, tagH);
 
-  // Neon Lime Masking Tape Sticker (pinned over bottom edge of photo)
-  const tapeW = compactMode ? 280 : 350;
-  const tapeH = compactMode ? 56 : 70;
-  const tapeX = -tapeW / 2;
-  const tapeY = photoY + photoH - tapeH / 2;
+  const cleanName = (options.studentName || "").trim().toUpperCase() || "DFB";
+  const nameToUse = cleanName.length > 24 ? cleanName.slice(0, 24) : cleanName;
+  const fullTagText = `HEY, I AM ${nameToUse}`;
 
-  ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = 4;
-  ctx.shadowOffsetY = 6;
-  ctx.fillStyle = "#C5E800"; // Exact neon lime
-  ctx.fillRect(tapeX, tapeY, tapeW, tapeH);
+  // Dynamically shrink font size if text exceeds 340px
+  let tagFontSize = 44;
+  ctx.font = `${tagFontSize}px 'Anton', Impact, sans-serif`;
+  while (ctx.measureText(fullTagText).width > 340 && tagFontSize > 28) {
+    tagFontSize -= 1;
+    ctx.font = `${tagFontSize}px 'Anton', Impact, sans-serif`;
+  }
+
+  ctx.fillStyle = "#0E0A18";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(fullTagText, tagX + tagW / 2, tagY + tagH / 2 + 2);
+
+  // 3c. Title
+  ctx.textAlign = "left";
+  ctx.font = "70px 'Anton', Impact, sans-serif";
+
+  // Line 1: "EXCITED TO SHARE" (Anton 70px, color #0E0A18, left x=38, baseline y=1028)
+  ctx.fillStyle = "#0E0A18";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("EXCITED TO SHARE", cardLeft + 38, cardTop + 1028);
+
+  // Line 2: "MY FIRST " in #0E0A18 followed by "WEBSITE!" in #6238F5, baseline y=1105
+  ctx.fillStyle = "#0E0A18";
+  ctx.fillText("MY FIRST ", cardLeft + 38, cardTop + 1105);
+  const myFirstWidth = ctx.measureText("MY FIRST ").width;
+  ctx.fillStyle = "#6238F5";
+  ctx.fillText("WEBSITE!", cardLeft + 38 + myFirstWidth, cardTop + 1105);
+
+  // 3d. Bottom bars
+  // Left bar: x=30 to 450, y=1160 to 1216, background #0E0A18. Text "SPARK CLUB", white, bold sans 24px, centered
+  const barY = cardTop + 1160;
+  const barH = 56;
+  ctx.fillStyle = "#0E0A18";
+  ctx.fillRect(cardLeft + 30, barY, 420, barH);
+
+  ctx.font = "800 24px 'Inter', system-ui, sans-serif";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("SPARK CLUB", cardLeft + 30 + 210, barY + barH / 2);
+
+  // Right box: x=480 to 750, same y range, 4px solid #0E0A18 border, white fill. Text "26-27 TEAM"
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(cardLeft + 480, barY, 270, barH);
+  ctx.strokeStyle = "#0E0A18";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(cardLeft + 480, barY, 270, barH);
+
+  ctx.fillStyle = "#0E0A18";
+  ctx.fillText("26-27 TEAM", cardLeft + 480 + 135, barY + barH / 2);
+
   ctx.restore();
 
-  // 4. White Polaroid Section: "Hey, I am [Student Name]" + "and excited to share my first website!"
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
+  return canvas.toDataURL("image/png");
+}
 
-  const studentDisplayName = options.studentName.trim() || "A Student";
-  let nameUpper = studentDisplayName.toUpperCase();
-  if (nameUpper.length > 22) nameUpper = nameUpper.slice(0, 20) + "…";
+/**
+ * Draws one peeking card with pink rectangle and clipped logo
+ */
+function drawPeekingCard(
+  ctx: CanvasRenderingContext2D,
+  logoImg: HTMLImageElement | null,
+  logoWidth: number,
+  logoLeftFraction: number,
+  logoTopFraction: number
+) {
+  const cardW = 280;
+  const cardH = 390;
+  const halfW = cardW / 2;
+  const halfH = cardH / 2;
 
-  const textBaseY = photoY + photoH + (compactMode ? 44 : 56);
+  // Drop shadow
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = 50;
+  ctx.shadowOffsetX = 14;
+  ctx.shadowOffsetY = 22;
 
-  // Line 1: "Hey, I am"
-  ctx.font = `800 ${compactMode ? 18 : 24}px 'Manrope', system-ui, sans-serif`;
-  ctx.fillStyle = "#64748B"; // Slate gray
-  ctx.fillText("Hey, I am", photoX + 10, textBaseY);
+  // White Card
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(-halfW, -halfH, cardW, cardH);
 
-  // Line 2: Student Name in bold display font
-  ctx.font = `900 ${compactMode ? 42 : 54}px 'Anton', 'Bebas Neue', 'Barlow Condensed', sans-serif`;
-  ctx.fillStyle = "#0F172A"; // Dark slate
-  ctx.fillText(nameUpper, photoX + 10, textBaseY + (compactMode ? 32 : 40));
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
 
-  // Line 3: "and excited to share my first website! 🚀"
-  ctx.font = `800 ${compactMode ? 22 : 28}px 'Barlow Condensed', 'Manrope', sans-serif`;
-  ctx.fillStyle = "#4321A9"; // Royal purple
-  ctx.fillText("and excited to share my first website! 🚀", photoX + 10, textBaseY + (compactMode ? 86 : 118));
+  // Pink rectangle: inset at left 14%, top 14%, right 8%, bottom 20%
+  const pinkX = -halfW + cardW * 0.14;
+  const pinkY = -halfH + cardH * 0.14;
+  const pinkW = cardW * (1.0 - 0.14 - 0.08);
+  const pinkH = cardH * (1.0 - 0.14 - 0.2);
 
-  // Line 4: Clean website domain pill
-  const pillY = textBaseY + (compactMode ? 132 : 185);
-  const pillH = compactMode ? 40 : 50;
+  ctx.fillStyle = "#E8307A";
+  ctx.fillRect(pinkX, pinkY, pinkW, pinkH);
 
-  ctx.fillStyle = "#F1F5F9";
-  roundRect(ctx, photoX + 10, pillY, photoW - 20, pillH, 8);
-  ctx.fill();
-  ctx.strokeStyle = "#CBD5E1";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#1E293B";
-  ctx.font = `700 ${compactMode ? 13 : 16}px 'Manrope', monospace, sans-serif`;
-  let cleanDomain = options.websiteUrl.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-  if (cleanDomain.length > 34) cleanDomain = cleanDomain.slice(0, 32) + "…";
-  ctx.fillText(`🔗  ${cleanDomain || "spark-registration-station.vercel.app"}`, 0, pillY + pillH / 2);
-
-  ctx.restore(); // Restore Polaroid transform
-
-  // 5. Top Story Header: Frosted Club Pill
-  if (!compactMode) {
+  // Clip to pink rectangle for the logo
+  if (logoImg) {
     ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.beginPath();
+    ctx.rect(pinkX, pinkY, pinkW, pinkH);
+    ctx.clip();
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
-    roundRect(ctx, 540 - 220, 60, 440, 56, 28);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "800 17px 'Manrope', system-ui, sans-serif";
-    ctx.fillText("⚡ SPARK CLUB · IIIT BHOPAL ⚡", 540, 88);
-
-    // 6. Bottom Story Footer
-    ctx.fillStyle = "#E0E7FF";
-    ctx.font = "800 17px 'Manrope', system-ui, sans-serif";
-    ctx.fillText("TAG @SPARK_IIITB ON INSTAGRAM STORIES", 540, 1855);
-
+    const logoX = -halfW + cardW * logoLeftFraction;
+    const logoY = -halfH + cardH * logoTopFraction;
+    const logoHeight = logoWidth * (logoImg.height / logoImg.width);
+    ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
   }
 }
