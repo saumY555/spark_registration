@@ -7,13 +7,18 @@ import {
   Copy,
   Check,
   Upload,
+  AlertCircle,
+  ExternalLink,
+  ChevronRight,
   RotateCcw,
+  Camera,
+  Layers,
+  ArrowRight,
+  CheckCircle2,
   Globe,
   Github,
   Loader2,
-  ChevronRight,
-  Trash2,
-  Image as ImageIcon,
+  Info,
 } from "lucide-react";
 import { FaInstagram } from "react-icons/fa";
 import { toast } from "sonner";
@@ -28,19 +33,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitBuild, isSafePublicUrl } from "@/lib/build-submission.functions";
+import { captureWebsiteScreenshot, submitBuild, isSafePublicUrl } from "@/lib/build-submission.functions";
 import { isValidScholarNumber } from "@/lib/registration.functions";
 import { renderInstagramStoryPoster, dataUrlToFile } from "@/lib/poster-generator";
 import { SparkStoryStage } from "@/components/spark-story-stage";
+import { cn } from "@/lib/utils";
 
 interface DropYourBuildModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type Step = "form" | "poster";
+type Step = "form" | "screenshot" | "poster";
 
 export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalProps) {
+  const captureScreenshotFn = useServerFn(captureWebsiteScreenshot);
   const submitBuildFn = useServerFn(submitBuild);
 
   const [step, setStep] = useState<Step>("form");
@@ -50,26 +57,31 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   const [studentName, setStudentName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
+  const [wantsAutoScreenshot, setWantsAutoScreenshot] = useState(true);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Manual screenshot upload state
+  // Screenshot state
+  const [isCapturing, setIsCapturing] = useState(false);
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const captureCanceledRef = useRef(false);
 
-  // Poster & Submission state
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Poster state
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null);
+  const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const [customCaption, setCustomCaption] = useState(
     "Hey, I am DFB and excited to share my first website! 🚀🔥\n\nSharing my build with Spark Club @spark_iiitb.\n\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment"
   );
 
-  // Pre-fill from existing registration if saved in localStorage
+  // Reset when dialog is reopened
   useEffect(() => {
     if (open && step === "form" && !scholarNumber) {
+      // Pre-fill from existing registration if saved in localStorage
       try {
         const saved = localStorage.getItem("sgt26_registration");
         if (saved) {
@@ -127,6 +139,57 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
     return Object.keys(newErrors).length === 0;
   }
 
+  // Handle Form Submit
+  async function handleInitialSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    if (wantsAutoScreenshot) {
+      // Move to screenshot capture step
+      setStep("screenshot");
+      await executeScreenshotCapture(websiteUrl.trim());
+    } else {
+      // Proceed directly to manual or skipped screenshot
+      setStep("screenshot");
+    }
+  }
+
+  // Execute server screenshot capture
+  async function executeScreenshotCapture(targetUrl: string) {
+    captureCanceledRef.current = false;
+    setIsCapturing(true);
+    setCaptureError("");
+    setScreenshotDataUrl(null);
+
+    try {
+      const result = await captureScreenshotFn({
+        data: { url: targetUrl },
+      });
+
+      if (captureCanceledRef.current) return;
+
+      if (result.success && result.dataUrl) {
+        setScreenshotDataUrl(result.dataUrl);
+        toast.success("Website screenshot captured successfully!");
+      } else {
+        setCaptureError(
+          result.error ||
+            "Could not automatically capture your site screenshot. You can upload an image manually or continue with the branded poster."
+        );
+      }
+    } catch (err) {
+      if (captureCanceledRef.current) return;
+      console.error("[Screenshot Error]", err);
+      setCaptureError(
+        "Screenshot request timed out. You can upload a screenshot file manually or proceed with the branded placeholder."
+      );
+    } finally {
+      if (!captureCanceledRef.current) {
+        setIsCapturing(false);
+      }
+    }
+  }
+
   // Handle Manual File Upload
   function handleFileUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -142,27 +205,37 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
       return;
     }
 
+    captureCanceledRef.current = true;
+    setIsCapturing(false);
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const base64 = event.target?.result as string;
       if (base64) {
         setScreenshotDataUrl(base64);
-        toast.success("Screenshot attached!");
+        setCaptureError("");
+        toast.success("Custom screenshot uploaded!");
       }
     };
     reader.readAsDataURL(file);
   }
 
-  // Handle Direct Submission (Primary Goal: save links + generate poster immediately)
-  async function handleFormSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!validateForm()) return;
-
-    setIsSubmitting(true);
+  // Generate Final Poster & Record Build
+  async function handleGeneratePoster() {
+    setIsGeneratingPoster(true);
     try {
       const effectiveName = studentName.trim() || "DFB";
+      // Render official 1080x1920 poster canvas
+      const generatedUrl = await renderInstagramStoryPoster({
+        studentName: effectiveName,
+        websiteUrl: websiteUrl.trim(),
+        screenshotDataUrl: screenshotDataUrl,
+        stageElement: stageRef.current,
+      });
 
-      // 1. Primary Goal: Record build submission in backend
+      setPosterDataUrl(generatedUrl);
+
+      // Record build submission in backend
       try {
         await submitBuildFn({
           data: {
@@ -173,31 +246,21 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
             screenshotUrl: screenshotDataUrl ? "stored_with_submission" : undefined,
           },
         });
-        toast.success("Build submitted successfully! 🔥");
       } catch (subErr) {
         console.warn("[Build record non-fatal]", subErr);
       }
 
-      // 2. Render official 1080x1920 Instagram Story poster
-      const generatedUrl = await renderInstagramStoryPoster({
-        studentName: effectiveName,
-        websiteUrl: websiteUrl.trim(),
-        screenshotDataUrl: screenshotDataUrl,
-        stageElement: stageRef.current,
-      });
-
-      setPosterDataUrl(generatedUrl);
       setStep("poster");
-
       const cleanUrl = websiteUrl.trim();
       setCustomCaption(
         `Hey, I am ${effectiveName} and excited to share my first website! 🚀🔥\n\nCheck out my build: ${cleanUrl}\n\nSharing with @spark_iiitb!\n#SparkClub #FirstWebsite #BuildInPublic #WebDevelopment`
       );
+      toast.success("Your Spark Club poster is ready! 🔥");
     } catch (err) {
-      console.error("[Submission error]", err);
-      toast.error("Failed to submit build. Please try again.");
+      console.error("[Poster Generation Error]", err);
+      toast.error("Failed to generate poster. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsGeneratingPoster(false);
     }
   }
 
@@ -234,11 +297,13 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
         });
         toast.success("Shared successfully!");
       } catch (shareErr) {
+        // User cancelled or aborted
         if ((shareErr as Error).name !== "AbortError") {
           toast.error("Sharing was cancelled or unsupported on this device.");
         }
       }
     } else {
+      // Desktop / unsupported browser fallback
       handleDownloadPoster();
       toast.info(
         "Direct image sharing is unsupported on this browser. Your poster has been downloaded—you can upload it to Instagram Stories!"
@@ -262,13 +327,13 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   function handleStartOver() {
     setStep("form");
     setScreenshotDataUrl(null);
+    setCaptureError("");
     setPosterDataUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto border-2 border-foreground bg-card p-0 shadow-[10px_10px_0_var(--foreground)] sm:rounded-none">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto border-2 border-foreground bg-card p-0 shadow-[10px_10px_0_var(--foreground)] sm:rounded-none">
         {/* Header Bar */}
         <div className="border-b-2 border-foreground bg-stage px-6 py-4 text-stage-foreground">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -279,7 +344,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                   Drop Your Build
                 </DialogTitle>
                 <DialogDescription className="text-xs font-semibold text-stage-foreground/75">
-                  Submit your first website & get your official Instagram Story poster
+                  Showcase your first website & generate an official Instagram Story poster
                 </DialogDescription>
               </div>
             </div>
@@ -287,19 +352,27 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
             {/* Stepper Indicator */}
             <div className="flex items-center gap-1.5 text-xs font-black uppercase">
               <span
-                className={`rounded px-2.5 py-0.5 ${
+                className={`rounded px-2 py-0.5 ${
                   step === "form" ? "bg-secondary text-secondary-foreground" : "bg-stage-foreground/20 text-stage-foreground"
                 }`}
               >
-                1. Submit Build
+                1. Build Info
               </span>
               <ChevronRight className="size-3 opacity-60" />
               <span
-                className={`rounded px-2.5 py-0.5 ${
+                className={`rounded px-2 py-0.5 ${
+                  step === "screenshot" ? "bg-secondary text-secondary-foreground" : "bg-stage-foreground/20 text-stage-foreground"
+                }`}
+              >
+                2. Preview
+              </span>
+              <ChevronRight className="size-3 opacity-60" />
+              <span
+                className={`rounded px-2 py-0.5 ${
                   step === "poster" ? "bg-secondary text-secondary-foreground" : "bg-stage-foreground/20 text-stage-foreground"
                 }`}
               >
-                2. Story Poster
+                3. Poster
               </span>
             </div>
           </div>
@@ -308,14 +381,14 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
         <div className="p-6">
           {/* STEP 1: FORM */}
           {step === "form" && (
-            <form onSubmit={handleFormSubmit} className="space-y-5">
+            <form onSubmit={handleInitialSubmit} className="space-y-5">
               <div className="rounded border border-primary/30 bg-primary/10 p-3.5 text-xs text-foreground">
                 <p className="font-bold flex items-center gap-1.5 text-primary">
                   <Sparkles className="size-3.5" /> Built your first website for Search for Spark?
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  Submit your deployed project links here to record your milestone. You can also attach a screenshot
-                  to feature inside your official Instagram Story poster!
+                  Submit your deployed project here. We'll capture a screenshot of your build and render a personalized
+                  1080×1920 Instagram Story poster to celebrate your milestone!
                 </p>
               </div>
 
@@ -412,77 +485,44 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                 )}
               </div>
 
-              {/* Manual Screenshot Upload (Optional) */}
               <div className="rounded border-2 border-foreground/20 bg-muted/20 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold uppercase text-foreground flex items-center gap-1.5">
-                    <ImageIcon className="size-3.5 text-primary" /> Screenshot{" "}
-                    <span className="text-muted-foreground font-normal">(Optional)</span>
-                  </span>
-                  {screenshotDataUrl && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScreenshotDataUrl(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                      className="text-[11px] font-bold text-destructive hover:underline flex items-center gap-1"
-                    >
-                      <Trash2 className="size-3" /> Remove
-                    </button>
-                  )}
-                </div>
-
-                {screenshotDataUrl ? (
-                  <div className="flex items-center gap-3.5 rounded border border-foreground/20 bg-background p-2.5">
-                    <div className="relative aspect-[720/870] h-18 overflow-hidden rounded border border-foreground/30 bg-muted shrink-0 shadow-sm">
-                      <img
-                        src={screenshotDataUrl}
-                        alt="Screenshot Preview"
-                        className="size-full object-cover object-top"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-foreground">Screenshot attached</p>
-                      <p className="text-[11px] text-muted-foreground">Will be featured inside your story photo frame</p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="mt-1.5 h-6 text-[10px] font-bold"
-                      >
-                        Change Image
-                      </Button>
-                    </div>
+                <span className="text-xs font-extrabold uppercase text-foreground block">
+                  Screenshot Preference
+                </span>
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs">
+                  <input
+                    type="radio"
+                    name="screenshotPref"
+                    checked={wantsAutoScreenshot}
+                    onChange={() => setWantsAutoScreenshot(true)}
+                    className="mt-0.5 size-4 accent-primary"
+                  />
+                  <div>
+                    <span className="font-bold text-foreground">Auto-Capture Live Viewport (Recommended)</span>
+                    <p className="text-muted-foreground">
+                      Our worker will visit your website and take a screenshot of your site.
+                    </p>
                   </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="group cursor-pointer rounded border-2 border-dashed border-foreground/30 bg-card/60 p-4 text-center transition-all hover:border-foreground hover:bg-card"
-                  >
-                    <div className="mx-auto mb-1.5 grid size-9 place-items-center rounded-full bg-secondary/30 text-secondary-foreground group-hover:bg-secondary">
-                      <Upload className="size-4" />
-                    </div>
-                    <p className="text-xs font-bold text-foreground">Upload screenshot from your device</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">PNG, JPG, or WEBP (Max 8MB)</p>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs">
+                  <input
+                    type="radio"
+                    name="screenshotPref"
+                    checked={!wantsAutoScreenshot}
+                    onChange={() => setWantsAutoScreenshot(false)}
+                    className="mt-0.5 size-4 accent-primary"
+                  />
+                  <div>
+                    <span className="font-bold text-foreground">Upload or Skip Screenshot</span>
+                    <p className="text-muted-foreground">
+                      You can manually upload an image or generate the poster with the Spark Club terminal graphic.
+                    </p>
                   </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-
-                <p className="text-[11px] text-muted-foreground">
-                  💡 <strong>Tip:</strong> You can submit right away! If you omit the screenshot, your poster will automatically feature the official Spark Club purple gradient frame.
-                </p>
+                </label>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-foreground/15">
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -491,27 +531,222 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  variant="electric"
-                  disabled={isSubmitting}
-                  className="font-bold shadow-[3px_3px_0_var(--foreground)]"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-1.5 size-4 animate-spin" /> Submitting Build…
-                    </>
-                  ) : (
-                    <>
-                      🔥 Submit Build & Get Poster
-                    </>
-                  )}
+                <Button type="submit" variant="electric" className="font-bold">
+                  Next: Capture & Generate <ArrowRight className="ml-1 size-4" />
                 </Button>
               </div>
             </form>
           )}
 
-          {/* STEP 2: POSTER PREVIEW & SHARING */}
+          {/* STEP 2: SCREENSHOT REVIEW & ALTERNATIVES */}
+          {step === "screenshot" && (
+            <div className="space-y-5">
+              {isCapturing ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
+                  <div className="relative">
+                    <Loader2 className="size-12 animate-spin text-primary" />
+                    <Sparkles className="absolute -top-1 -right-1 size-5 text-secondary animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="font-display text-xl uppercase tracking-wider">Capturing Live Viewport…</h4>
+                    <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                      Connecting to <span className="font-bold text-foreground break-all">{websiteUrl}</span> and taking a snapshot of
+                      your build. This usually takes 3–5 seconds.
+                    </p>
+                  </div>
+
+                  {/* Manual Upload Option so user doesn't need to wait */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        captureCanceledRef.current = true;
+                        setIsCapturing(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="border-foreground font-bold uppercase text-xs shadow-sm hover:bg-foreground hover:text-background"
+                    >
+                      <Upload className="mr-1.5 size-3.5" /> Manual Upload
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        captureCanceledRef.current = true;
+                        setIsCapturing(false);
+                        handleGeneratePoster();
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground font-semibold"
+                    >
+                      Skip & Use Club Graphic →
+                    </Button>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground/75">
+                    Taking too long? Click <strong>Manual Upload</strong> to pick an image from your computer.
+                  </p>
+                </div>
+              ) : screenshotDataUrl ? (
+                /* Screenshot Success State */
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-foreground/15 pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 rounded bg-green-500/15 px-2 py-0.5 text-xs font-bold text-green-600 dark:text-green-400">
+                        <CheckCircle2 className="size-3.5" /> Screenshot Ready
+                      </div>
+                      <h4 className="font-extrabold uppercase text-sm mt-1">Live Viewport Preview</h4>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs h-8"
+                      >
+                        <Upload className="mr-1 size-3.5" /> Replace with File
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => executeScreenshotCapture(websiteUrl)}
+                        className="text-xs h-8"
+                      >
+                        <RotateCcw className="mr-1 size-3.5" /> Retake
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Preview Container */}
+                  <div className="relative mx-auto aspect-[16/10] max-h-72 w-full overflow-hidden rounded border-2 border-foreground bg-muted shadow-inner">
+                    <img
+                      src={screenshotDataUrl}
+                      alt="Captured Website Viewport"
+                      className="size-full object-cover object-top"
+                    />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground text-center">
+                    This snapshot will be placed inside the tilted Polaroid frame on your Instagram Story poster.
+                  </p>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-foreground/15">
+                    <Button type="button" variant="outline" onClick={() => setStep("form")}>
+                      Back to Form
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="electric"
+                      onClick={handleGeneratePoster}
+                      disabled={isGeneratingPoster}
+                      className="font-bold"
+                    >
+                      {isGeneratingPoster ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" /> Rendering Poster…
+                        </>
+                      ) : (
+                        <>
+                          Generate Official Poster <Sparkles className="ml-1.5 size-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* Screenshot Fallback / Manual / Skip State */
+                <div className="space-y-5">
+                  {captureError ? (
+                    <div className="rounded border-2 border-destructive/40 bg-destructive/10 p-4 text-xs">
+                      <div className="flex items-center gap-2 font-bold text-destructive">
+                        <AlertCircle className="size-4 shrink-0" /> Automatic capture didn't respond
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{captureError}</p>
+                    </div>
+                  ) : (
+                    <div className="rounded border border-primary/30 bg-primary/10 p-4 text-xs">
+                      <div className="flex items-center gap-2 font-bold text-primary">
+                        <Info className="size-4 shrink-0" /> Select how to display your build
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        You can upload a custom screenshot from your device or use our signature Spark Club branded terminal
+                        graphic.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {/* Option A: Manual Upload */}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="group cursor-pointer rounded border-2 border-foreground bg-card p-5 text-center transition-all hover:-translate-y-1 hover:shadow-[4px_4px_0_var(--foreground)]"
+                    >
+                      <div className="mx-auto mb-3 grid size-12 place-items-center rounded-full bg-secondary/30 text-secondary-foreground group-hover:bg-secondary">
+                        <Upload className="size-6" />
+                      </div>
+                      <h5 className="font-extrabold uppercase text-sm">Upload Screenshot</h5>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        PNG, JPG or WEBP from your computer (max 8MB)
+                      </p>
+                      <Button type="button" variant="outline" size="sm" className="mt-3 font-bold uppercase text-xs">
+                        Select Image
+                      </Button>
+                    </div>
+
+                    {/* Option B: Continue with Spark Club Graphic */}
+                    <div
+                      onClick={handleGeneratePoster}
+                      className="group cursor-pointer rounded border-2 border-foreground bg-card p-5 text-center transition-all hover:-translate-y-1 hover:shadow-[4px_4px_0_var(--foreground)]"
+                    >
+                      <div className="mx-auto mb-3 grid size-12 place-items-center rounded-full bg-primary/20 text-primary group-hover:bg-primary group-hover:text-primary-foreground">
+                        <Sparkles className="size-6" />
+                      </div>
+                      <h5 className="font-extrabold uppercase text-sm">Skip & Use Club Graphic</h5>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Uses the official Spark Club purple gradient frame
+                      </p>
+                      <Button type="button" variant="electric" size="sm" className="mt-3 font-bold uppercase text-xs">
+                        Continue Without Image
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <Button type="button" variant="outline" onClick={() => setStep("form")}>
+                      Back to Form
+                    </Button>
+                    {captureError && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => executeScreenshotCapture(websiteUrl)}
+                        className="text-xs"
+                      >
+                        <RotateCcw className="mr-1 size-3.5" /> Try Auto-Capture Again
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Hidden file input for manual uploads */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </div>
+          )}
+
+          {/* STEP 3: POSTER PREVIEW & SHARING */}
           {step === "poster" && posterDataUrl && (
             <div className="space-y-6">
               <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start">
@@ -537,7 +772,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                     </div>
                     <h4 className="mt-1 font-display text-2xl uppercase">Your Poster Is Live!</h4>
                     <p className="text-xs text-muted-foreground">
-                      Your build links have been recorded. Download the story poster to share on Instagram!
+                      Download the poster to share on your Instagram Story or share directly to your favorite apps.
                     </p>
                   </div>
 
