@@ -17,6 +17,7 @@
 
 import { toPng } from "html-to-image";
 import sparkLogoUrl from "@/assets/spark_logo_transparent.png";
+import { loadAntonFont } from "./anton-font";
 
 export interface PosterOptions {
   studentName?: string;
@@ -48,6 +49,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * Waits for fonts to be loaded before rendering
  */
 export async function ensureFontsLoaded(): Promise<void> {
+  try {
+    await loadAntonFont();
+  } catch {
+    // Continue even if font load fails
+  }
+
   if (typeof document !== "undefined" && document.fonts) {
     try {
       await document.fonts.ready;

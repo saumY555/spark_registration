@@ -1,5 +1,6 @@
 import { useMemo, forwardRef, type HTMLAttributes } from "react";
 import sparkLogo from "@/assets/spark_logo_transparent.png";
+import { ANTON_FONT_FACE_CSS } from "@/lib/anton-font";
 
 export interface SparkStoryStageProps extends HTMLAttributes<HTMLDivElement> {
   studentName?: string;
@@ -103,6 +104,9 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
             fontFamily: "'Anton', Impact, sans-serif",
           }}
         >
+          {/* Inlined Anton font definition for accurate mobile offline SVG foreignObject rasterization */}
+          <style dangerouslySetInnerHTML={{ __html: ANTON_FONT_FACE_CSS }} />
+
           {/* 1. Background Anton Letters (Behind everything) */}
           {/* Row 1: SEARCH y=10, x=-20 */}
           <div
