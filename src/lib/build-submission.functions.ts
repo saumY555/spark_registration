@@ -257,6 +257,16 @@ export const submitBuild = createServerFn({ method: "POST" })
       } else if (record?.id) {
         submissionId = record.id;
       }
+
+      // Also mirror the build link to their applicant profile in applications table
+      try {
+        await supabaseAdmin
+          .from("applications")
+          .update({ portfolio_url: cleanWebsiteUrl })
+          .eq("scholar_number", normalizedScholar);
+      } catch (appUpdateErr) {
+        console.warn("[Applications portfolio_url update warning]", appUpdateErr);
+      }
     } catch (dbErr) {
       console.warn("[Supabase build_submissions error]", dbErr);
     }
