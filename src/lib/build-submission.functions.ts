@@ -98,15 +98,21 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
 
     const targetUrl = safetyCheck.url.toString();
 
+    // Strip hash fragment for visual hero screenshot capture so anchors (e.g. #register, #about)
+    // don't scroll past the landing banner or viewport.
+    const captureUrlObj = new URL(targetUrl);
+    captureUrlObj.hash = "";
+    const captureUrl = captureUrlObj.toString();
+
     // 1. High-speed cloud screenshot engine (Microlink: headless Chromium cluster, exact 1200x1450 @ 2x)
     // Typically completes in 700ms - 1500ms
     try {
       const microlinkUrl = `https://api.microlink.io?url=${encodeURIComponent(
-        targetUrl
+        captureUrl
       )}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1200&viewport.height=1450&viewport.deviceScaleFactor=2`;
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4500);
+      const timeout = setTimeout(() => controller.abort(), 7000);
 
       const response = await fetch(microlinkUrl, {
         signal: controller.signal,
@@ -121,7 +127,8 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("image") || contentType.includes("octet-stream")) {
           const buffer = await response.arrayBuffer();
-          if (buffer.byteLength > 1000) {
+          // Filter out tiny placeholder images (< 15KB)
+          if (buffer.byteLength > 15000) {
             const base64 = Buffer.from(buffer).toString("base64");
             const mimeType = contentType.includes("png") ? "image/png" : "image/jpeg";
             return {
@@ -137,14 +144,14 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
 
     // 2. Secondary cloud fallback (thum.io / mshots)
     const backupProviders = [
-      `https://image.thum.io/get/width/1200/crop/1450/${targetUrl}`,
-      `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=1200&h=1450`,
+      `https://image.thum.io/get/width/1200/crop/1450/${captureUrl}`,
+      `https://s0.wp.com/mshots/v1/${encodeURIComponent(captureUrl)}?w=1200&h=1450`,
     ];
 
     for (const providerUrl of backupProviders) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3500);
+        const timeout = setTimeout(() => controller.abort(), 4500);
 
         const response = await fetch(providerUrl, {
           signal: controller.signal,
@@ -159,7 +166,9 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
           const contentType = response.headers.get("content-type") || "";
           if (contentType.includes("image") || contentType.includes("octet-stream")) {
             const buffer = await response.arrayBuffer();
-            if (buffer.byteLength > 1000) {
+            // Important: mshots returns an ~8KB placeholder ("Generating Preview...") when not yet cached.
+            // Only accept real screenshots (> 20,000 bytes)
+            if (buffer.byteLength > 20000) {
               const base64 = Buffer.from(buffer).toString("base64");
               const mimeType = contentType.includes("png") ? "image/png" : "image/jpeg";
               return {
@@ -197,7 +206,7 @@ export const captureWebsiteScreenshot = createServerFn({ method: "POST" })
         });
         const page = await context.newPage();
         page.setDefaultTimeout(3500);
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 3500 });
+        await page.goto(captureUrl, { waitUntil: "domcontentloaded", timeout: 3500 });
 
         const buffer = await page.screenshot({
           type: "png",
