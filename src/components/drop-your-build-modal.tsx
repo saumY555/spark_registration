@@ -1091,7 +1091,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                       onClick={handleDownloadPoster}
                       className="font-extrabold uppercase shadow-[3px_3px_0_var(--foreground)]"
                     >
-                      <Download className="mr-2 size-4" /> {posterSize === "wide" ? "Download 16:9 PNG" : "Download 9:16 PNG"}
+                      <Download className="mr-2 size-4" /> Download
                     </Button>
 
                     <Button
