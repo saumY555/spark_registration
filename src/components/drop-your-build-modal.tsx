@@ -223,14 +223,14 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
   }
 
   // Generate Final Poster & Record Build
-  async function handleGeneratePoster(overrideLine1?: string, overrideLine2?: string) {
+  async function handleGeneratePoster(overrideLine1?: unknown, overrideLine2?: unknown) {
     setIsGeneratingPoster(true);
     try {
-      const effectiveName = studentName.trim() || "DFB";
-      const l1 = overrideLine1 ?? titleLine1;
-      const l2 = overrideLine2 ?? titleLine2;
-      if (overrideLine1 !== undefined) setTitleLine1(overrideLine1);
-      if (overrideLine2 !== undefined) setTitleLine2(overrideLine2);
+      const effectiveName = (typeof studentName === "string" ? studentName.trim() : "") || "DFB";
+      const l1 = typeof overrideLine1 === "string" && overrideLine1.trim() ? overrideLine1.trim() : titleLine1;
+      const l2 = typeof overrideLine2 === "string" && overrideLine2.trim() ? overrideLine2.trim() : titleLine2;
+      if (typeof overrideLine1 === "string" && overrideLine1.trim()) setTitleLine1(overrideLine1.trim());
+      if (typeof overrideLine2 === "string" && overrideLine2.trim()) setTitleLine2(overrideLine2.trim());
 
       // Allow state update to propagate to offscreen stage DOM
       await new Promise((resolve) => setTimeout(resolve, 60));
@@ -707,7 +707,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
                     <Button
                       type="button"
                       variant="electric"
-                      onClick={handleGeneratePoster}
+                      onClick={() => handleGeneratePoster()}
                       disabled={isGeneratingPoster}
                       className="font-bold"
                     >
@@ -765,7 +765,7 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
 
                     {/* Option B: Continue with Spark Club Graphic */}
                     <div
-                      onClick={handleGeneratePoster}
+                      onClick={() => handleGeneratePoster()}
                       className="group cursor-pointer rounded border-2 border-foreground bg-card p-5 text-center transition-all hover:-translate-y-1 hover:shadow-[4px_4px_0_var(--foreground)]"
                     >
                       <div className="mx-auto mb-3 grid size-12 place-items-center rounded-full bg-primary/20 text-primary group-hover:bg-primary group-hover:text-primary-foreground">

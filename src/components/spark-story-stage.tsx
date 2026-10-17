@@ -20,20 +20,20 @@ export const SparkStoryStage = forwardRef<HTMLDivElement, SparkStoryStageProps>(
   ) {
     // Sanitize and format name: default "DFB", max 24 chars
     const displayName = useMemo(() => {
-      const clean = (studentName || "").trim().toUpperCase();
+      const clean = (typeof studentName === "string" ? studentName : "").trim().toUpperCase();
       if (!clean) return "DFB";
       return clean.length > 24 ? clean.slice(0, 24) : clean;
     }, [studentName]);
 
     // Sanitize and format custom title lines (with ground-truth defaults)
     const cleanLine1 = useMemo(() => {
-      const line = (titleLine1 || "EXCITED TO SHARE").trim().toUpperCase();
-      return line.slice(0, 36);
+      const raw = typeof titleLine1 === "string" && titleLine1.trim() ? titleLine1 : "EXCITED TO SHARE";
+      return raw.trim().toUpperCase().slice(0, 36);
     }, [titleLine1]);
 
     const cleanLine2 = useMemo(() => {
-      const line = (titleLine2 || "MY FIRST WEBSITE!").trim().toUpperCase();
-      return line.slice(0, 36);
+      const raw = typeof titleLine2 === "string" && titleLine2.trim() ? titleLine2 : "MY FIRST WEBSITE!";
+      return raw.trim().toUpperCase().slice(0, 36);
     }, [titleLine2]);
 
     // Split Line 2 so the final word is highlighted in #6238F5

@@ -33,7 +33,9 @@ export interface PosterOptions {
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!src.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
     img.onerror = (e) => reject(new Error(`Failed to load image asset: ${e}`));
     img.src = src;
@@ -73,7 +75,7 @@ export async function renderInstagramStoryPoster(options: PosterOptions): Promis
         height: 1920,
         pixelRatio: 1,
         cacheBust: false,
-        skipFonts: false,
+        skipFonts: true,
       });
       if (dataUrl && dataUrl.startsWith("data:image/png")) {
         return dataUrl;
@@ -287,7 +289,8 @@ async function renderCanvas2D(options: PosterOptions): Promise<string> {
   ctx.fillStyle = "#C5E800";
   ctx.fillRect(tagX, tagY, tagW, tagH);
 
-  const cleanName = (options.studentName || "").trim().toUpperCase() || "DFB";
+  const rawName = typeof options.studentName === "string" ? options.studentName.trim().toUpperCase() : "DFB";
+  const cleanName = rawName || "DFB";
   const nameToUse = cleanName.length > 24 ? cleanName.slice(0, 24) : cleanName;
   const fullTagText = `HEY, I AM ${nameToUse}`;
 
@@ -305,8 +308,10 @@ async function renderCanvas2D(options: PosterOptions): Promise<string> {
   ctx.fillText(fullTagText, tagX + tagW / 2, tagY + tagH / 2 + 2);
 
   // 3c. Title
-  const line1 = (options.titleLine1 || "EXCITED TO SHARE").trim().toUpperCase();
-  const line2 = (options.titleLine2 || "MY FIRST WEBSITE!").trim().toUpperCase();
+  const rawLine1 = typeof options.titleLine1 === "string" && options.titleLine1.trim() ? options.titleLine1 : "EXCITED TO SHARE";
+  const rawLine2 = typeof options.titleLine2 === "string" && options.titleLine2.trim() ? options.titleLine2 : "MY FIRST WEBSITE!";
+  const line1 = rawLine1.trim().toUpperCase();
+  const line2 = rawLine2.trim().toUpperCase();
 
   const line1FontSize = line1.length > 24 ? 50 : line1.length > 18 ? 60 : 70;
   const line2FontSize = line2.length > 24 ? 50 : line2.length > 18 ? 60 : 70;
