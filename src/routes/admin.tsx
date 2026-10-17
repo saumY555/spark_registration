@@ -24,7 +24,15 @@ import {
   Mail,
   UserCheck,
   Globe,
+  Rocket,
+  Flame,
+  Check,
+  Copy,
+  Activity,
+  Layers,
+  ArrowUpRight,
 } from "lucide-react";
+import { FaGithub } from "react-icons/fa";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -34,6 +42,8 @@ import {
   adminUpdateApplication,
   adminVerifyPassword,
   adminDeleteApplication,
+  adminGetBuildSubmissions,
+  type AdminBuildSubmissionItem,
 } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/admin")({
@@ -103,11 +113,26 @@ function formatDisplayUrl(raw?: string | null): string {
   }
 }
 
+function formatTimeAgo(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  if (isNaN(diffMs)) return "—";
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 45) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  return `${diffDays}d ago`;
+}
+
 function AdminPage() {
   const verifyPassFn = useServerFn(adminVerifyPassword);
   const getAppsFn = useServerFn(adminGetApplications);
   const updateAppFn = useServerFn(adminUpdateApplication);
   const deleteAppFn = useServerFn(adminDeleteApplication);
+  const getBuildsFn = useServerFn(adminGetBuildSubmissions);
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -115,14 +140,26 @@ function AdminPage() {
   const [authError, setAuthError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
 
+  // Top View Switcher: "registrations" (Candidate registrations) vs "drop_builds" (Drop Your Build Station)
+  const [adminView, setAdminView] = useState<"registrations" | "drop_builds">("registrations");
+
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState("");
 
+  // Drop Your Build Station state
+  const [buildSubmissions, setBuildSubmissions] = useState<AdminBuildSubmissionItem[]>([]);
+  const [isLoadingBuilds, setIsLoadingBuilds] = useState(false);
+  const [buildSearchQuery, setBuildSearchQuery] = useState("");
+  const [autoRefreshBuilds, setAutoRefreshBuilds] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [copiedAllUrlsMsg, setCopiedAllUrlsMsg] = useState("");
+  const [buildSourceFilter, setBuildSourceFilter] = useState<"all_submitted_links" | "drop_your_build_only">("all_submitted_links");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTrack, setSelectedTrack] = useState("All Tracks");
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
-  const [linkFilter, setLinkFilter] = useState<"all" | "with_link" | "without_link">("all");
+  const [linkFilter, setLinkFilter] = useState<"all" | "drop_build" | "with_link" | "without_link">("all");
 
   const [activeCandidate, setActiveCandidate] = useState<ApplicationRecord | null>(null);
   const [editNotes, setEditNotes] = useState("");
@@ -161,6 +198,7 @@ function AdminPage() {
         // Ignore
       }
       loadApplications(pass);
+      loadBuildSubmissions(pass, true);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : "Invalid password. Access denied.");
       setIsAuthenticated(false);
@@ -173,6 +211,7 @@ function AdminPage() {
     setIsAuthenticated(false);
     setPassword("");
     setApplications([]);
+    setBuildSubmissions([]);
     try {
       sessionStorage.removeItem("spark_admin_auth");
     } catch {
@@ -189,12 +228,37 @@ function AdminPage() {
     try {
       const res = await getAppsFn({ data: { password: pass } });
       setApplications(res.applications as ApplicationRecord[]);
+      loadBuildSubmissions(pass, true);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Failed to fetch candidates.");
     } finally {
       setIsLoading(false);
     }
   }
+
+  async function loadBuildSubmissions(passOverride?: string, silent = false) {
+    const pass = passOverride || password;
+    if (!pass) return;
+    if (!silent) setIsLoadingBuilds(true);
+
+    try {
+      const res = await getBuildsFn({ data: { password: pass } });
+      setBuildSubmissions(res.submissions || []);
+    } catch (err) {
+      console.warn("[Failed to load build submissions]", err);
+    } finally {
+      if (!silent) setIsLoadingBuilds(false);
+    }
+  }
+
+  // Auto-refresh builds every 10 seconds if toggled on
+  useEffect(() => {
+    if (!isAuthenticated || !autoRefreshBuilds || !password) return;
+    const interval = setInterval(() => {
+      loadBuildSubmissions(password, true);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, autoRefreshBuilds, password]);
 
   // Open detail modal
   function openCandidateDetails(cand: ApplicationRecord) {
@@ -258,11 +322,37 @@ function AdminPage() {
     }
   }
 
-  // Filtered applications
+  // Set of scholar numbers that submitted via Drop Your Build
+  const dropBuildScholarSet = useMemo(() => {
+    const set = new Set<string>();
+    buildSubmissions.forEach(b => {
+      if (b.scholarNumber) set.add(b.scholarNumber.toUpperCase().trim());
+    });
+    applications.forEach(a => {
+      if (a.admin_notes && a.admin_notes.includes("[DROP_YOUR_BUILD]")) {
+        set.add((a.scholar_number || "").toUpperCase().trim());
+      }
+    });
+    return set;
+  }, [buildSubmissions, applications]);
+
+  // Total Drop Your Build submissions count
+  const dropBuildCount = useMemo(() => {
+    let count = 0;
+    applications.forEach(a => {
+      if (dropBuildScholarSet.has((a.scholar_number || "").toUpperCase().trim())) {
+        count++;
+      }
+    });
+    return Math.max(count, buildSubmissions.length);
+  }, [applications, dropBuildScholarSet, buildSubmissions]);
+
+  // Filtered applications for main table
   const filteredApps = useMemo(() => {
     return applications.filter(app => {
       const q = searchQuery.toLowerCase().trim();
       const hasLink = Boolean(app.portfolio_url && app.portfolio_url.trim().length > 0);
+      const isDropBuild = dropBuildScholarSet.has((app.scholar_number || "").toUpperCase().trim());
 
       const matchesSearch =
         !q ||
@@ -284,12 +374,149 @@ function AdminPage() {
 
       const matchesLink =
         linkFilter === "all" ||
+        (linkFilter === "drop_build" && isDropBuild) ||
         (linkFilter === "with_link" && hasLink) ||
         (linkFilter === "without_link" && !hasLink);
 
       return matchesSearch && matchesTrack && matchesStatus && matchesLink;
     });
-  }, [applications, searchQuery, selectedTrack, selectedStatus, linkFilter]);
+  }, [applications, searchQuery, selectedTrack, selectedStatus, linkFilter, dropBuildScholarSet]);
+
+  // Submissions for the Drop Your Build Live Station View
+  const displayBuilds = useMemo(() => {
+    const map = new Map<string, AdminBuildSubmissionItem>();
+
+    // 1. Direct / local submissions
+    for (const b of buildSubmissions) {
+      map.set(b.scholarNumber.toUpperCase().trim(), b);
+    }
+
+    // 2. Applications tagged with [DROP_YOUR_BUILD] in Supabase
+    for (const app of applications) {
+      const scholar = (app.scholar_number || "").toUpperCase().trim();
+      if (!scholar) continue;
+
+      const isMarked = app.admin_notes && app.admin_notes.includes("[DROP_YOUR_BUILD]");
+      if (isMarked && !map.has(scholar)) {
+        const webMatch = app.admin_notes?.match(/Web:\s*(https?:\/\/[^\s|]+)/i);
+        const ghMatch = app.admin_notes?.match(/GitHub:\s*(https?:\/\/[^\s|)]+)/i);
+        map.set(scholar, {
+          id: app.id,
+          scholarNumber: scholar,
+          studentName: app.full_name,
+          websiteUrl: webMatch ? webMatch[1] : app.portfolio_url || "",
+          githubUrl: ghMatch ? ghMatch[1] : null,
+          screenshotUrl: null,
+          submittedAt: app.updated_at || app.created_at,
+          posterGenerated: false,
+          isRegisteredCandidate: true,
+          registrationNo: app.registration_no,
+          email: app.institute_email,
+          phone: app.phone_number,
+          track: app.primary_track,
+          status: app.status,
+        });
+      }
+    }
+
+    // 3. If source filter is "all_submitted_links", also include any candidate with a portfolio/build link
+    if (buildSourceFilter === "all_submitted_links") {
+      for (const app of applications) {
+        const scholar = (app.scholar_number || "").toUpperCase().trim();
+        if (!scholar || !app.portfolio_url) continue;
+        if (!map.has(scholar)) {
+          map.set(scholar, {
+            id: app.id,
+            scholarNumber: scholar,
+            studentName: app.full_name,
+            websiteUrl: app.portfolio_url,
+            githubUrl: null,
+            screenshotUrl: null,
+            submittedAt: app.updated_at || app.created_at,
+            posterGenerated: false,
+            isRegisteredCandidate: true,
+            registrationNo: app.registration_no,
+            email: app.institute_email,
+            phone: app.phone_number,
+            track: app.primary_track,
+            status: app.status,
+          });
+        }
+      }
+    }
+
+    let list = Array.from(map.values());
+
+    if (buildSearchQuery.trim()) {
+      const q = buildSearchQuery.toLowerCase().trim();
+      list = list.filter(
+        b =>
+          b.studentName.toLowerCase().includes(q) ||
+          b.scholarNumber.toLowerCase().includes(q) ||
+          b.websiteUrl.toLowerCase().includes(q) ||
+          (b.githubUrl && b.githubUrl.toLowerCase().includes(q)) ||
+          (b.track && b.track.toLowerCase().includes(q))
+      );
+    }
+
+    return list.sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    );
+  }, [buildSubmissions, applications, buildSourceFilter, buildSearchQuery]);
+
+  // Copy all build URLs to clipboard
+  function handleCopyAllBuildUrls() {
+    const urls = displayBuilds.map(b => b.websiteUrl).filter(Boolean);
+    if (!urls.length) {
+      alert("No build URLs available to copy.");
+      return;
+    }
+    navigator.clipboard.writeText(urls.join("\n"));
+    setCopiedAllUrlsMsg(`Copied ${urls.length} URLs!`);
+    setTimeout(() => setCopiedAllUrlsMsg(""), 3000);
+  }
+
+  // Export Builds to CSV
+  function handleExportBuildsCsv() {
+    if (!displayBuilds.length) {
+      alert("No build records to export.");
+      return;
+    }
+
+    const headers = [
+      "Scholar Number",
+      "Student Name",
+      "Website URL",
+      "GitHub URL",
+      "Submitted At (IST)",
+      "Registered Status",
+      "Primary Track",
+      "Email",
+      "Phone",
+    ];
+
+    const rows = displayBuilds.map(b => [
+      `"${b.scholarNumber}"`,
+      `"${b.studentName.replace(/"/g, '""')}"`,
+      `"${b.websiteUrl}"`,
+      `"${b.githubUrl || ""}"`,
+      `"${formatTimestampIST(b.submittedAt)}"`,
+      `"${b.isRegisteredCandidate ? "Registered" : "Walk-in"}"`,
+      `"${b.track || ""}"`,
+      `"${b.email || ""}"`,
+      `"${b.phone || ""}"`,
+    ]);
+
+    const csvString = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Spark_DropYourBuild_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 
   // Track & Submission Metrics
   const metrics = useMemo(() => {
@@ -487,308 +714,701 @@ function AdminPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
-        {/* Metrics Counter Bar */}
-        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          <div className="border border-foreground/20 bg-card p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Total Applicants</span>
-            <p className="font-display text-3xl font-extrabold text-primary">{metrics.total}</p>
-          </div>
-          <div className="border border-foreground/20 bg-card p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Code & Web</span>
-            <p className="font-display text-2xl font-bold">{metrics.codeWeb}</p>
-          </div>
-          <div className="border border-foreground/20 bg-card p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-muted-foreground">AI & Data</span>
-            <p className="font-display text-2xl font-bold">{metrics.aiData}</p>
-          </div>
-          <div className="border border-foreground/20 bg-card p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Robotics & HW</span>
-            <p className="font-display text-2xl font-bold">{metrics.robotics}</p>
-          </div>
-          <div className="border border-foreground/20 bg-card p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Design & Media</span>
-            <p className="font-display text-2xl font-bold">{metrics.design}</p>
-          </div>
-          <div className="border border-foreground/20 bg-card p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Events & PR</span>
-            <p className="font-display text-2xl font-bold">{metrics.events}</p>
-          </div>
-          {/* Submitted Links Card (Clickable Quick Filter) */}
-          <div
-            onClick={() => setLinkFilter(prev => (prev === "with_link" ? "all" : "with_link"))}
-            className={`cursor-pointer border p-3 shadow-sm transition-all hover:-translate-y-0.5 ${
-              linkFilter === "with_link"
-                ? "border-primary bg-primary/15 ring-2 ring-primary shadow-[3px_3px_0_var(--foreground)]"
-                : "border-foreground/20 bg-card hover:border-foreground"
+      {/* Top Navigation Tabs: Candidate Registrations vs Drop Your Build Live Station */}
+      <div className="border-b-2 border-foreground/30 bg-muted/20 px-4 md:px-8">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setAdminView("registrations")}
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+              adminView === "registrations"
+                ? "border-primary text-primary bg-primary/10 shadow-sm"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
             }`}
-            title="Click to toggle: Show only candidates who submitted links"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase text-primary flex items-center gap-1">
-                <span>🔥</span> Submitted Links
-              </span>
-              {linkFilter === "with_link" && (
-                <span className="rounded bg-primary px-1 text-[9px] font-black uppercase text-primary-foreground">
-                  Active
+            <Users className="size-4" />
+            <span>Candidate Registrations</span>
+            <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-bold text-foreground">
+              {applications.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdminView("drop_builds");
+              loadBuildSubmissions(password);
+            }}
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap relative ${
+              adminView === "drop_builds"
+                ? "border-primary text-primary bg-primary/15 shadow-sm"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            }`}
+          >
+            <Rocket className="size-4 text-primary animate-bounce" />
+            <span>Drop Your Build Live Feed</span>
+            <span className="rounded bg-primary px-2 py-0.5 text-[11px] font-black text-primary-foreground shadow-sm">
+              {displayBuilds.length}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-black text-primary tracking-widest uppercase ml-1">
+              <span className="size-1.5 rounded-full bg-primary animate-ping" />
+              LIVE
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
+        {adminView === "drop_builds" ? (
+          /* ============================================================== */
+          /* DEDICATED DROP YOUR BUILD STATION VIEW                          */
+          /* ============================================================== */
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Live Station Banner */}
+            <section className="rounded-lg border-2 border-primary bg-gradient-to-r from-primary/15 via-primary/5 to-background p-4 sm:p-6 shadow-[6px_6px_0_var(--foreground)]">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="grid size-9 place-items-center rounded bg-primary text-primary-foreground shadow-sm font-black">
+                      <Rocket className="size-5" />
+                    </span>
+                    <h2 className="font-display text-xl sm:text-2xl font-black uppercase tracking-wider text-foreground">
+                      Drop Your Build · Live Station
+                    </h2>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/20 px-2.5 py-0.5 text-[11px] font-black text-primary uppercase">
+                      <span className="size-2 rounded-full bg-primary animate-ping" />
+                      Live Feed
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs font-semibold text-muted-foreground max-w-2xl">
+                    Dedicated live feed of all projects & deployed websites submitted from the home page <strong>"Drop Your Build"</strong> option.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadBuildSubmissions(password)}
+                    disabled={isLoadingBuilds}
+                    className="font-bold text-xs"
+                    title="Fetch latest build drops"
+                  >
+                    <RefreshCw className={`mr-1.5 size-3.5 ${isLoadingBuilds ? "animate-spin" : ""}`} />
+                    Refresh Feed
+                  </Button>
+
+                  <Button
+                    variant={autoRefreshBuilds ? "electric" : "outline"}
+                    size="sm"
+                    onClick={() => setAutoRefreshBuilds(prev => !prev)}
+                    className="font-bold text-xs"
+                    title="Auto-refresh incoming submissions every 10 seconds"
+                  >
+                    <Activity className={`mr-1.5 size-3.5 ${autoRefreshBuilds ? "animate-pulse" : ""}`} />
+                    {autoRefreshBuilds ? "Auto-Refresh: ON (10s)" : "Auto-Refresh: OFF"}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyAllBuildUrls}
+                    className="font-bold text-xs border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground"
+                    title="Copy all live project URLs for evaluation"
+                  >
+                    <Copy className="mr-1.5 size-3.5" />
+                    {copiedAllUrlsMsg || "Copy All URLs"}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportBuildsCsv}
+                    className="font-bold text-xs"
+                    title="Export build submissions to CSV"
+                  >
+                    <Download className="mr-1.5 size-3.5" />
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            {/* Metric Summary Cards */}
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <Rocket className="size-3 text-primary" /> Total Builds Dropped
                 </span>
-              )}
-            </div>
-            <p className="font-display text-2xl font-extrabold text-primary">{metrics.withLinks}</p>
-          </div>
-          <div className="border border-foreground/20 bg-secondary/20 p-3 shadow-sm">
-            <span className="text-[10px] font-extrabold uppercase text-foreground">Shortlisted</span>
-            <p className="font-display text-2xl font-extrabold text-primary">{metrics.shortlisted}</p>
-          </div>
-        </section>
+                <p className="font-display text-3xl font-extrabold text-primary mt-1">{displayBuilds.length}</p>
+                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">Projects received</p>
+              </div>
 
-        {/* Dedicated Option Segment: View All vs With Submitted Links */}
-        <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border-2 border-foreground bg-muted/40 p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setLinkFilter("all")}
-              className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
-                linkFilter === "all"
-                  ? "bg-foreground text-background shadow-[2px_2px_0_var(--foreground)]"
-                  : "text-muted-foreground hover:bg-background hover:text-foreground"
-              }`}
-            >
-              All Candidates ({metrics.total})
-            </button>
-            <button
-              type="button"
-              onClick={() => setLinkFilter("with_link")}
-              className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-black uppercase transition-all ${
-                linkFilter === "with_link"
-                  ? "bg-primary text-primary-foreground shadow-[2px_2px_0_var(--foreground)]"
-                  : "text-foreground hover:bg-primary/15"
-              }`}
-            >
-              <span className="text-sm">🔥</span>
-              <span>With Submitted Links ({metrics.withLinks})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLinkFilter("without_link")}
-              className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
-                linkFilter === "without_link"
-                  ? "bg-foreground text-background shadow-[2px_2px_0_var(--foreground)]"
-                  : "text-muted-foreground hover:bg-background hover:text-foreground"
-              }`}
-            >
-              No Link ({metrics.withoutLinks})
-            </button>
-          </div>
+              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <FaGithub className="size-3 text-foreground" /> With GitHub Repos
+                </span>
+                <p className="font-display text-3xl font-bold mt-1">
+                  {displayBuilds.filter(b => b.githubUrl).length}
+                </p>
+                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">Source code linked</p>
+              </div>
 
-          {linkFilter === "with_link" && (
-            <div className="inline-flex items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary animate-in fade-in duration-200">
-              <span className="flex size-2 rounded-full bg-primary animate-pulse" />
-              Showing <strong>{filteredApps.length}</strong> candidates who dropped a website or portfolio link
-            </div>
-          )}
-        </section>
+              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <UserCheck className="size-3 text-foreground" /> Registered Members
+                </span>
+                <p className="font-display text-3xl font-bold mt-1">
+                  {displayBuilds.filter(b => b.isRegisteredCandidate).length}
+                </p>
+                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">Matched with applicant profile</p>
+              </div>
 
-        {/* Search & Filter Bar */}
-        <section className="mb-6 flex flex-col gap-3 rounded-md border border-foreground/20 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search by name, scholar no, email, phone, link domain, or Reg ID…"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 text-sm"
-            />
-          </div>
+              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <Clock className="size-3 text-primary" /> Latest Drop
+                </span>
+                <p className="font-display text-2xl font-black text-primary mt-1 truncate">
+                  {displayBuilds[0] ? formatTimeAgo(displayBuilds[0].submittedAt) : "—"}
+                </p>
+                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 truncate">
+                  {displayBuilds[0] ? displayBuilds[0].studentName : "Waiting for submission"}
+                </p>
+              </div>
+            </section>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={linkFilter}
-              onChange={e => setLinkFilter(e.target.value as "all" | "with_link" | "without_link")}
-              className={`h-10 rounded-md border px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-ring ${
-                linkFilter === "with_link"
-                  ? "border-primary bg-primary/10 text-primary font-black"
-                  : "border-input bg-background"
-              }`}
-            >
-              <option value="all">Links: All Candidates</option>
-              <option value="with_link">🔥 With Submitted Links ({metrics.withLinks})</option>
-              <option value="without_link">Without Links ({metrics.withoutLinks})</option>
-            </select>
+            {/* Search & Source Filter Bar */}
+            <section className="flex flex-col gap-3 rounded-md border border-foreground/20 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search builds by student name, scholar no, website URL, or GitHub repo…"
+                  value={buildSearchQuery}
+                  onChange={e => setBuildSearchQuery(e.target.value)}
+                  className="pl-9 text-sm"
+                />
+              </div>
 
-            <select
-              value={selectedTrack}
-              onChange={e => setSelectedTrack(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {TRACK_LIST.map(t => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+              <div className="inline-flex rounded-md border border-foreground/20 bg-muted/30 p-1">
+                <button
+                  type="button"
+                  onClick={() => setBuildSourceFilter("all_submitted_links")}
+                  className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                    buildSourceFilter === "all_submitted_links"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  All Submitted Builds ({applications.filter(a => a.portfolio_url).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBuildSourceFilter("drop_your_build_only")}
+                  className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                    buildSourceFilter === "drop_your_build_only"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  🚀 Drop Station Only ({buildSubmissions.length})
+                </button>
+              </div>
+            </section>
 
-            <select
-              value={selectedStatus}
-              onChange={e => setSelectedStatus(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {STATUS_LIST.map(s => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-
-            {(searchQuery || selectedTrack !== "All Tracks" || selectedStatus !== "All Statuses" || linkFilter !== "all") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedTrack("All Tracks");
-                  setSelectedStatus("All Statuses");
-                  setLinkFilter("all");
-                }}
-                className="text-xs font-bold"
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-        </section>
-
-        {/* Table Section */}
-        {fetchError && (
-          <div className="mb-4 border border-destructive bg-destructive/10 p-4 text-sm font-bold text-destructive">
-            {fetchError}
-          </div>
-        )}
-
-        <div className="overflow-x-auto border-2 border-foreground bg-card shadow-[6px_6px_0_var(--foreground)]">
-          <table className="w-full text-left text-xs sm:text-sm">
-            <thead className="border-b-2 border-foreground bg-foreground text-background">
-              <tr>
-                <th className="p-3 font-extrabold uppercase">#</th>
-                <th className="p-3 font-extrabold uppercase">Reg No</th>
-                <th className="p-3 font-extrabold uppercase">Candidate</th>
-                <th className="p-3 font-extrabold uppercase">Scholar No</th>
-                <th className="p-3 font-extrabold uppercase">Contact</th>
-                <th className="p-3 font-extrabold uppercase">Tracks</th>
-                <th className="p-3 font-extrabold uppercase">Link / Build</th>
-                <th className="p-3 font-extrabold uppercase">Status</th>
-                <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
-                <th className="p-3 text-right font-extrabold uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-foreground/10 font-medium">
-              {filteredApps.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="p-8 text-center text-muted-foreground">
-                    {isLoading
-                      ? "Loading candidates…"
-                      : linkFilter === "with_link"
-                      ? "No candidates found with submitted links for this filter."
-                      : "No matching candidate records found."}
-                  </td>
-                </tr>
-              ) : (
-                filteredApps.map((app, index) => {
-                  const statusColor =
-                    app.status === "selected"
-                      ? "bg-secondary text-foreground font-extrabold"
-                      : app.status === "shortlisted"
-                      ? "bg-primary text-primary-foreground font-extrabold"
-                      : app.status === "rejected"
-                      ? "bg-destructive/20 text-destructive font-bold"
-                      : "bg-muted text-muted-foreground font-semibold";
-
-                  return (
-                    <tr
-                      key={app.id}
-                      className="transition-colors hover:bg-muted/40 cursor-pointer"
-                      onClick={() => openCandidateDetails(app)}
-                    >
-                      <td className="p-3 text-muted-foreground font-bold">{index + 1}</td>
-                      <td className="p-3 font-extrabold text-primary whitespace-nowrap">
-                        {app.registration_no}
-                      </td>
-                      <td className="p-3">
-                        <div className="font-extrabold text-foreground">{app.full_name}</div>
-                        {app.admin_notes && (
-                          <span className="inline-block mt-0.5 rounded bg-yellow-400/20 px-1.5 py-0.2 text-[10px] font-bold text-yellow-800 dark:text-yellow-200">
-                            📝 Has Note
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 uppercase font-extrabold">{app.scholar_number}</td>
-                      <td className="p-3 whitespace-nowrap">
-                        <div className="text-xs text-foreground font-medium">{app.institute_email}</div>
-                        <div className="text-xs text-muted-foreground">{app.phone_number}</div>
-                      </td>
-                      <td className="p-3">
-                        <span className="font-bold text-primary">{app.primary_track}</span>
-                        {app.secondary_track && (
-                          <div className="text-[11px] text-muted-foreground">
-                            2nd: {app.secondary_track}
+            {/* Builds Table */}
+            <div className="overflow-x-auto border-2 border-foreground bg-card shadow-[6px_6px_0_var(--foreground)]">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="border-b-2 border-foreground bg-foreground text-background">
+                  <tr>
+                    <th className="p-3 font-extrabold uppercase">#</th>
+                    <th className="p-3 font-extrabold uppercase">Candidate</th>
+                    <th className="p-3 font-extrabold uppercase">Scholar No</th>
+                    <th className="p-3 font-extrabold uppercase">Live Deployed Website</th>
+                    <th className="p-3 font-extrabold uppercase">GitHub Repo</th>
+                    <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
+                    <th className="p-3 font-extrabold uppercase">Source / Status</th>
+                    <th className="p-3 text-right font-extrabold uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-foreground/10 font-medium">
+                  {displayBuilds.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-12 text-center">
+                        <div className="mx-auto max-w-md space-y-3">
+                          <div className="mx-auto grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
+                            <Rocket className="size-6 animate-bounce" />
                           </div>
-                        )}
-                      </td>
-                      <td className="p-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        {app.portfolio_url ? (
-                          <a
-                            href={app.portfolio_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group inline-flex items-center gap-1.5 rounded border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-black text-primary transition-all hover:bg-primary hover:text-primary-foreground hover:shadow-sm"
-                            title={app.portfolio_url}
-                          >
-                            <ExternalLink className="size-3 shrink-0" />
-                            <span className="max-w-[150px] truncate">
-                              {formatDisplayUrl(app.portfolio_url)}
-                            </span>
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground/40 text-xs font-semibold">—</span>
-                        )}
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
-                        <span className={`inline-block rounded px-2 py-0.5 text-[11px] uppercase ${statusColor}`}>
-                          {app.status || "pending"}
-                        </span>
-                      </td>
-                      <td className="p-3 whitespace-nowrap text-xs text-muted-foreground">
-                        {formatTimestampIST(app.created_at)}
-                      </td>
-                      <td className="p-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openCandidateDetails(app)}
-                            className="h-8 px-2 text-xs font-bold"
-                          >
-                            <Eye className="mr-1 size-3.5" /> View
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteCandidate(app.id, app.full_name)}
-                            className="h-8 px-2 text-xs font-bold text-destructive hover:bg-destructive hover:text-destructive-foreground border-destructive/30"
-                            title={`Delete ${app.full_name}`}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                          <h3 className="font-display text-lg font-bold uppercase tracking-wider text-foreground">
+                            Waiting for Incoming Builds
+                          </h3>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Students who submit their deployed websites via the <strong>"Drop Your Build"</strong> modal will appear here in real time.
+                          </p>
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+                  ) : (
+                    displayBuilds.map((build, index) => {
+                      const isDropStation =
+                        buildSubmissions.some(b => b.scholarNumber.toUpperCase().trim() === build.scholarNumber.toUpperCase().trim()) ||
+                        applications.some(
+                          a =>
+                            (a.scholar_number || "").toUpperCase().trim() === build.scholarNumber.toUpperCase().trim() &&
+                            a.admin_notes &&
+                            a.admin_notes.includes("[DROP_YOUR_BUILD]")
+                        );
+
+                      return (
+                        <tr key={build.id || build.scholarNumber} className="transition-colors hover:bg-muted/40">
+                          <td className="p-3 text-muted-foreground font-bold">{index + 1}</td>
+                          <td className="p-3">
+                            <div className="font-extrabold text-foreground">{build.studentName}</div>
+                            {build.email && (
+                              <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">{build.email}</div>
+                            )}
+                          </td>
+                          <td className="p-3 uppercase font-extrabold">
+                            <span className="font-mono bg-muted/60 px-2 py-0.5 rounded border border-foreground/10">
+                              {build.scholarNumber}
+                            </span>
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={build.websiteUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-black text-primary transition-all hover:bg-primary hover:text-primary-foreground hover:shadow-md"
+                                title={build.websiteUrl}
+                              >
+                                <ExternalLink className="size-3.5 shrink-0" />
+                                <span className="max-w-[190px] truncate">
+                                  {formatDisplayUrl(build.websiteUrl)}
+                                </span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(build.websiteUrl);
+                                  setCopiedUrl(build.websiteUrl);
+                                  setTimeout(() => setCopiedUrl(null), 2000);
+                                }}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                                title="Copy URL"
+                              >
+                                {copiedUrl === build.websiteUrl ? (
+                                  <Check className="size-3.5 text-primary" />
+                                ) : (
+                                  <Copy className="size-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            {build.githubUrl ? (
+                              <a
+                                href={build.githubUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded border border-foreground/20 bg-background px-2.5 py-1 text-xs font-bold text-foreground hover:border-foreground transition-all"
+                                title={build.githubUrl}
+                              >
+                                <FaGithub className="size-3 shrink-0" />
+                                <span className="max-w-[130px] truncate">{formatDisplayUrl(build.githubUrl)}</span>
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground/40 text-xs font-semibold">—</span>
+                            )}
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="font-bold text-foreground">{formatTimeAgo(build.submittedAt)}</div>
+                            <div className="text-[11px] text-muted-foreground">{formatTimestampIST(build.submittedAt)}</div>
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="flex flex-col gap-1 items-start">
+                              {isDropStation ? (
+                                <span className="inline-flex items-center gap-1 rounded bg-primary/15 border border-primary/40 px-2 py-0.5 text-[10px] font-black text-primary uppercase">
+                                  <Rocket className="size-2.5" /> DROP STATION
+                                </span>
+                              ) : (
+                                <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
+                                  REGISTRATION
+                                </span>
+                              )}
+                              {build.isRegisteredCandidate ? (
+                                <span className="text-[10px] font-bold text-muted-foreground">
+                                  {build.track || "Registered"}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-extrabold text-primary">Walk-in</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <a
+                                href={build.websiteUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
+                              >
+                                <ExternalLink className="size-3" /> Open
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* ============================================================== */
+          /* CANDIDATE REGISTRATIONS VIEW (MAIN TABLE)                       */
+          /* ============================================================== */
+          <div>
+            {/* Metrics Counter Bar */}
+            <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+              <div className="border border-foreground/20 bg-card p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Total Applicants</span>
+                <p className="font-display text-3xl font-extrabold text-primary">{metrics.total}</p>
+              </div>
+              <div className="border border-foreground/20 bg-card p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Code & Web</span>
+                <p className="font-display text-2xl font-bold">{metrics.codeWeb}</p>
+              </div>
+              <div className="border border-foreground/20 bg-card p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground">AI & Data</span>
+                <p className="font-display text-2xl font-bold">{metrics.aiData}</p>
+              </div>
+              <div className="border border-foreground/20 bg-card p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Robotics & HW</span>
+                <p className="font-display text-2xl font-bold">{metrics.robotics}</p>
+              </div>
+              <div className="border border-foreground/20 bg-card p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Design & Media</span>
+                <p className="font-display text-2xl font-bold">{metrics.design}</p>
+              </div>
+              <div className="border border-foreground/20 bg-card p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Events & PR</span>
+                <p className="font-display text-2xl font-bold">{metrics.events}</p>
+              </div>
+              {/* Submitted Links Card (Clickable Quick Filter) */}
+              <div
+                onClick={() => setLinkFilter(prev => (prev === "with_link" ? "all" : "with_link"))}
+                className={`cursor-pointer border p-3 shadow-sm transition-all hover:-translate-y-0.5 ${
+                  linkFilter === "with_link"
+                    ? "border-primary bg-primary/15 ring-2 ring-primary shadow-[3px_3px_0_var(--foreground)]"
+                    : "border-foreground/20 bg-card hover:border-foreground"
+                }`}
+                title="Click to toggle: Show only candidates who submitted links"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase text-primary flex items-center gap-1">
+                    <span>🔥</span> Submitted Links
+                  </span>
+                  {linkFilter === "with_link" && (
+                    <span className="rounded bg-primary px-1 text-[9px] font-black uppercase text-primary-foreground">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <p className="font-display text-2xl font-extrabold text-primary">{metrics.withLinks}</p>
+              </div>
+              <div className="border border-foreground/20 bg-secondary/20 p-3 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-foreground">Shortlisted</span>
+                <p className="font-display text-2xl font-extrabold text-primary">{metrics.shortlisted}</p>
+              </div>
+            </section>
+
+            {/* Dedicated Option Segment: View All vs Drop Your Build vs With Submitted Links */}
+            <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border-2 border-foreground bg-muted/40 p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setLinkFilter("all")}
+                  className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                    linkFilter === "all"
+                      ? "bg-foreground text-background shadow-[2px_2px_0_var(--foreground)]"
+                      : "text-muted-foreground hover:bg-background hover:text-foreground"
+                  }`}
+                >
+                  All Candidates ({metrics.total})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkFilter("drop_build")}
+                  className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-black uppercase transition-all ${
+                    linkFilter === "drop_build"
+                      ? "bg-primary text-primary-foreground shadow-[2px_2px_0_var(--foreground)]"
+                      : "text-foreground hover:bg-primary/15"
+                  }`}
+                >
+                  <Rocket className="size-3.5" />
+                  <span>Drop Your Build ({dropBuildCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkFilter("with_link")}
+                  className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-black uppercase transition-all ${
+                    linkFilter === "with_link"
+                      ? "bg-primary text-primary-foreground shadow-[2px_2px_0_var(--foreground)]"
+                      : "text-foreground hover:bg-primary/15"
+                  }`}
+                >
+                  <span className="text-sm">🔥</span>
+                  <span>With Any Link ({metrics.withLinks})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkFilter("without_link")}
+                  className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                    linkFilter === "without_link"
+                      ? "bg-foreground text-background shadow-[2px_2px_0_var(--foreground)]"
+                      : "text-muted-foreground hover:bg-background hover:text-foreground"
+                  }`}
+                >
+                  No Link ({metrics.withoutLinks})
+                </button>
+              </div>
+
+              {linkFilter === "drop_build" && (
+                <div className="inline-flex items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary animate-in fade-in duration-200">
+                  <Rocket className="size-3.5 animate-bounce" />
+                  Showing <strong>{filteredApps.length}</strong> candidates who submitted via <strong>Drop Your Build</strong>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+
+              {linkFilter === "with_link" && (
+                <div className="inline-flex items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary animate-in fade-in duration-200">
+                  <span className="flex size-2 rounded-full bg-primary animate-pulse" />
+                  Showing <strong>{filteredApps.length}</strong> candidates who dropped a website or portfolio link
+                </div>
+              )}
+            </section>
+
+            {/* Search & Filter Bar */}
+            <section className="mb-6 flex flex-col gap-3 rounded-md border border-foreground/20 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search by name, scholar no, email, phone, link domain, or Reg ID…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-9 text-sm"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={linkFilter}
+                  onChange={e => setLinkFilter(e.target.value as "all" | "drop_build" | "with_link" | "without_link")}
+                  className={`h-10 rounded-md border px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-ring ${
+                    linkFilter === "drop_build" || linkFilter === "with_link"
+                      ? "border-primary bg-primary/10 text-primary font-black"
+                      : "border-input bg-background"
+                  }`}
+                >
+                  <option value="all">Links: All Candidates</option>
+                  <option value="drop_build">🚀 Drop Your Build Submissions ({dropBuildCount})</option>
+                  <option value="with_link">🔥 With Any Submitted Link ({metrics.withLinks})</option>
+                  <option value="without_link">Without Links ({metrics.withoutLinks})</option>
+                </select>
+
+                <select
+                  value={selectedTrack}
+                  onChange={e => setSelectedTrack(e.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {TRACK_LIST.map(t => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedStatus}
+                  onChange={e => setSelectedStatus(e.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {STATUS_LIST.map(s => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+
+                {(searchQuery || selectedTrack !== "All Tracks" || selectedStatus !== "All Statuses" || linkFilter !== "all") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedTrack("All Tracks");
+                      setSelectedStatus("All Statuses");
+                      setLinkFilter("all");
+                    }}
+                    className="text-xs font-bold"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </section>
+
+            {/* Table Section */}
+            {fetchError && (
+              <div className="mb-4 border border-destructive bg-destructive/10 p-4 text-sm font-bold text-destructive">
+                {fetchError}
+              </div>
+            )}
+
+            <div className="overflow-x-auto border-2 border-foreground bg-card shadow-[6px_6px_0_var(--foreground)]">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="border-b-2 border-foreground bg-foreground text-background">
+                  <tr>
+                    <th className="p-3 font-extrabold uppercase">#</th>
+                    <th className="p-3 font-extrabold uppercase">Reg No</th>
+                    <th className="p-3 font-extrabold uppercase">Candidate</th>
+                    <th className="p-3 font-extrabold uppercase">Scholar No</th>
+                    <th className="p-3 font-extrabold uppercase">Contact</th>
+                    <th className="p-3 font-extrabold uppercase">Tracks</th>
+                    <th className="p-3 font-extrabold uppercase">Link / Build</th>
+                    <th className="p-3 font-extrabold uppercase">Status</th>
+                    <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
+                    <th className="p-3 text-right font-extrabold uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-foreground/10 font-medium">
+                  {filteredApps.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="p-8 text-center text-muted-foreground">
+                        {isLoading
+                          ? "Loading candidates…"
+                          : linkFilter === "drop_build"
+                          ? "No candidates found who submitted via Drop Your Build."
+                          : linkFilter === "with_link"
+                          ? "No candidates found with submitted links for this filter."
+                          : "No matching candidate records found."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredApps.map((app, index) => {
+                      const statusColor =
+                        app.status === "selected"
+                          ? "bg-secondary text-foreground font-extrabold"
+                          : app.status === "shortlisted"
+                          ? "bg-primary text-primary-foreground font-extrabold"
+                          : app.status === "rejected"
+                          ? "bg-destructive/20 text-destructive font-bold"
+                          : "bg-muted text-muted-foreground font-semibold";
+
+                      const isDropBuildCandidate = dropBuildScholarSet.has(
+                        (app.scholar_number || "").toUpperCase().trim()
+                      );
+
+                      return (
+                        <tr
+                          key={app.id}
+                          className="transition-colors hover:bg-muted/40 cursor-pointer"
+                          onClick={() => openCandidateDetails(app)}
+                        >
+                          <td className="p-3 text-muted-foreground font-bold">{index + 1}</td>
+                          <td className="p-3 font-extrabold text-primary whitespace-nowrap">
+                            {app.registration_no}
+                          </td>
+                          <td className="p-3">
+                            <div className="font-extrabold text-foreground">{app.full_name}</div>
+                            {app.admin_notes && (
+                              <span className="inline-block mt-0.5 rounded bg-yellow-400/20 px-1.5 py-0.2 text-[10px] font-bold text-yellow-800 dark:text-yellow-200">
+                                📝 Has Note
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 uppercase font-extrabold">{app.scholar_number}</td>
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="text-xs text-foreground font-medium">{app.institute_email}</div>
+                            <div className="text-xs text-muted-foreground">{app.phone_number}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="font-bold text-primary">{app.primary_track}</span>
+                            {app.secondary_track && (
+                              <div className="text-[11px] text-muted-foreground">
+                                2nd: {app.secondary_track}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            {app.portfolio_url ? (
+                              <div className="flex items-center gap-1.5">
+                                <a
+                                  href={app.portfolio_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="group inline-flex items-center gap-1.5 rounded border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-black text-primary transition-all hover:bg-primary hover:text-primary-foreground hover:shadow-sm"
+                                  title={app.portfolio_url}
+                                >
+                                  <ExternalLink className="size-3 shrink-0" />
+                                  <span className="max-w-[130px] truncate">
+                                    {formatDisplayUrl(app.portfolio_url)}
+                                  </span>
+                                </a>
+                                {isDropBuildCandidate && (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded bg-primary px-1.5 py-0.5 text-[10px] font-black uppercase text-primary-foreground shadow-sm"
+                                    title="Submitted via Drop Your Build station"
+                                  >
+                                    <Rocket className="size-2.5" /> BUILD
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground/40 text-xs font-semibold">—</span>
+                            )}
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            <span className={`inline-block rounded px-2 py-0.5 text-[11px] uppercase ${statusColor}`}>
+                              {app.status || "pending"}
+                            </span>
+                          </td>
+                          <td className="p-3 whitespace-nowrap text-xs text-muted-foreground">
+                            {formatTimestampIST(app.created_at)}
+                          </td>
+                          <td className="p-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openCandidateDetails(app)}
+                                className="h-8 px-2 text-xs font-bold"
+                              >
+                                <Eye className="mr-1 size-3.5" /> View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteCandidate(app.id, app.full_name)}
+                                className="h-8 px-2 text-xs font-bold text-destructive hover:bg-destructive hover:text-destructive-foreground border-destructive/30"
+                                title={`Delete ${app.full_name}`}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -892,6 +1512,24 @@ function AdminPage() {
                   )}
                 </div>
               </div>
+
+              {/* Drop Your Build Specific Highlight */}
+              {(dropBuildScholarSet.has(activeCandidate.scholar_number?.toUpperCase().trim()) ||
+                activeCandidate.admin_notes?.includes("[DROP_YOUR_BUILD]")) && (
+                <div className="rounded border-2 border-primary bg-primary/10 p-3.5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 font-black text-xs uppercase text-primary">
+                      <Rocket className="size-4 animate-bounce" /> Drop Your Build Station Submitter
+                    </span>
+                    <span className="rounded bg-primary px-2 py-0.5 text-[10px] font-black uppercase text-primary-foreground">
+                      Live Build Dropped
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-foreground/80 font-medium">
+                    This candidate submitted their website / project directly via the Spark Drop Your Build station.
+                  </p>
+                </div>
+              )}
 
               {/* Motivation */}
               <div>

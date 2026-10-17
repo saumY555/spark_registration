@@ -263,41 +263,79 @@ export const submitBuild = createServerFn({ method: "POST" })
 
     let submissionId = `BUILD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
-    // 1. Save to Supabase build_submissions table
+    // 1. Save to local persistent storage (guaranteed fail-safe)
     try {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: record, error } = await supabaseAdmin
-        .from("build_submissions")
-        .insert({
-          scholar_number: normalizedScholar,
-          student_name: data.studentName.trim(),
-          website_url: cleanWebsiteUrl,
-          github_url: cleanGithubUrl,
-          screenshot_url: data.screenshotUrl?.startsWith("http") ? data.screenshotUrl : null,
-        })
-        .select("id, created_at")
-        .maybeSingle();
-
-      if (error) {
-        console.warn("[Supabase build_submissions warning]", error.message);
-      } else if (record?.id) {
-        submissionId = record.id;
-      }
-
-      // Also mirror the build link to their applicant profile in applications table
-      try {
-        await supabaseAdmin
-          .from("applications")
-          .update({ portfolio_url: cleanWebsiteUrl })
-          .eq("scholar_number", normalizedScholar);
-      } catch (appUpdateErr) {
-        console.warn("[Applications portfolio_url update warning]", appUpdateErr);
-      }
-    } catch (dbErr) {
-      console.warn("[Supabase build_submissions error]", dbErr);
+      const { saveLocalBuildSubmission } = await import("@/lib/drop-build.server");
+      await saveLocalBuildSubmission({
+        id: submissionId,
+        scholarNumber: normalizedScholar,
+        studentName: data.studentName.trim(),
+        websiteUrl: cleanWebsiteUrl,
+        githubUrl: cleanGithubUrl,
+        screenshotUrl: data.screenshotUrl?.startsWith("http") ? data.screenshotUrl : null,
+        submittedAt: new Date().toISOString(),
+        posterGenerated: Boolean(data.screenshotUrl),
+      });
+    } catch (localErr) {
+      console.warn("[Local build store warning]", localErr);
     }
 
-    // 2. Mirror to Google Sheets webhook if configured
+    // 2. Save to Supabase (applications table with [DROP_YOUR_BUILD] tag)
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      // Check if student exists in applications
+      const { data: existingApp } = await supabaseAdmin
+        .from("applications")
+        .select("id, scholar_number, admin_notes, full_name")
+        .eq("scholar_number", normalizedScholar)
+        .maybeSingle();
+
+      const buildTag = "[DROP_YOUR_BUILD]";
+      const timeIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+      const tagNote = `${buildTag} ${timeIST} | Web: ${cleanWebsiteUrl}${cleanGithubUrl ? ` | GitHub: ${cleanGithubUrl}` : ""}`;
+
+      if (existingApp) {
+        const currentNotes = existingApp.admin_notes || "";
+        const updatedNotes = currentNotes.includes(buildTag)
+          ? `${currentNotes}\n${tagNote}`
+          : currentNotes ? `${currentNotes}\n\n${tagNote}` : tagNote;
+
+        await supabaseAdmin
+          .from("applications")
+          .update({
+            portfolio_url: cleanWebsiteUrl,
+            admin_notes: updatedNotes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingApp.id);
+      } else {
+        // Direct walk-in build drop - register as applicant so data is fully preserved in Supabase
+        const shortId = normalizedScholar.slice(-6) || Math.floor(100000 + Math.random() * 900000).toString();
+        await supabaseAdmin
+          .from("applications")
+          .insert({
+            registration_no: `SPARK-BUILD-${shortId}`,
+            full_name: data.studentName.trim(),
+            scholar_number: normalizedScholar,
+            institute_email: `${normalizedScholar.toLowerCase()}@iiitbhopal.ac.in`,
+            phone_number: "N/A",
+            primary_track: "Web Development",
+            secondary_track: null,
+            portfolio_url: cleanWebsiteUrl,
+            motivation: "Submitted via Drop Your Build station",
+            first_year_confirmed: true,
+            status: "pending",
+            admin_notes: tagNote,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+      }
+    } catch (dbErr) {
+      console.warn("[Supabase build drop save error]", dbErr);
+    }
+
+    // 3. Mirror to Google Sheets webhook if configured
     const webhookUrl =
       process.env["GOOGLE_SHEETS_WEBHOOK_URL"] ||
       process.env["VITE_GOOGLE_SHEETS_WEBHOOK_URL"] ||

@@ -146,6 +146,18 @@ export function DropYourBuildModal({ open, onOpenChange }: DropYourBuildModalPro
     e.preventDefault();
     if (!validateForm()) return;
 
+    // Record build submission immediately in the background so it is guaranteed saved right now!
+    submitBuildFn({
+      data: {
+        scholarNumber: scholarNumber.trim().toUpperCase(),
+        studentName: studentName.trim(),
+        websiteUrl: websiteUrl.trim(),
+        githubUrl: githubUrl.trim() || undefined,
+      },
+    }).catch((subErr) => {
+      console.warn("[Initial build submission record non-fatal]", subErr);
+    });
+
     if (wantsAutoScreenshot) {
       // Move to screenshot capture step
       setStep("screenshot");

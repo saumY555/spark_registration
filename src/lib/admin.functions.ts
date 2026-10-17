@@ -115,3 +115,105 @@ export const adminDeleteApplication = createServerFn({ method: "POST" })
 
     return { success: true };
   });
+
+export interface AdminBuildSubmissionItem {
+  id: string;
+  scholarNumber: string;
+  studentName: string;
+  websiteUrl: string;
+  githubUrl: string | null;
+  screenshotUrl: string | null;
+  submittedAt: string;
+  posterGenerated: boolean;
+  isRegisteredCandidate: boolean;
+  registrationNo?: string;
+  email?: string;
+  phone?: string;
+  track?: string;
+  status?: string;
+}
+
+export const adminGetBuildSubmissions = createServerFn({ method: "POST" })
+  .validator((input: { password: string }) => z.object({ password: z.string() }).parse(input))
+  .handler(async ({ data }): Promise<{ submissions: AdminBuildSubmissionItem[] }> => {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
+      throw new Error("Unauthorized. Invalid password.");
+    }
+
+    const { getLocalBuildSubmissions } = await import("@/lib/drop-build.server");
+    const localList = await getLocalBuildSubmissions();
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: applications } = await supabaseAdmin
+      .from("applications")
+      .select("*")
+      .neq("status", "deleted");
+
+    const appMap = new Map<string, (typeof applications extends (infer T)[] | null ? T : never)>();
+    (applications || []).forEach((app) => {
+      if (app.scholar_number) {
+        appMap.set(app.scholar_number.toUpperCase().trim(), app);
+      }
+    });
+
+    const map = new Map<string, AdminBuildSubmissionItem>();
+
+    // 1. Add all from local persistent store
+    for (const item of localList) {
+      const scholar = item.scholarNumber.toUpperCase().trim();
+      const app = appMap.get(scholar);
+      map.set(scholar, {
+        id: item.id,
+        scholarNumber: scholar,
+        studentName: item.studentName || app?.full_name || "Unknown Candidate",
+        websiteUrl: item.websiteUrl,
+        githubUrl: item.githubUrl || null,
+        screenshotUrl: item.screenshotUrl || null,
+        submittedAt: item.submittedAt || new Date().toISOString(),
+        posterGenerated: Boolean(item.posterGenerated),
+        isRegisteredCandidate: Boolean(app),
+        registrationNo: app?.registration_no,
+        email: app?.institute_email,
+        phone: app?.phone_number,
+        track: app?.primary_track,
+        status: app?.status,
+      });
+    }
+
+    // 2. Also check if any Supabase application has [DROP_YOUR_BUILD] in admin_notes
+    for (const app of applications || []) {
+      const scholar = (app.scholar_number || "").toUpperCase().trim();
+      if (!scholar) continue;
+
+      const notes = app.admin_notes || "";
+      if (notes.includes("[DROP_YOUR_BUILD]") && !map.has(scholar)) {
+        const webMatch = notes.match(/Web:\s*(https?:\/\/[^\s|]+)/i);
+        const ghMatch = notes.match(/GitHub:\s*(https?:\/\/[^\s|)]+)/i);
+        map.set(scholar, {
+          id: app.id,
+          scholarNumber: scholar,
+          studentName: app.full_name,
+          websiteUrl: webMatch ? webMatch[1] : app.portfolio_url || "",
+          githubUrl: ghMatch ? ghMatch[1] : null,
+          screenshotUrl: null,
+          submittedAt: app.updated_at || app.created_at,
+          posterGenerated: false,
+          isRegisteredCandidate: true,
+          registrationNo: app.registration_no,
+          email: app.institute_email,
+          phone: app.phone_number,
+          track: app.primary_track,
+          status: app.status,
+        });
+      }
+    }
+
+    // Sort newest first
+    const list = Array.from(map.values()).sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    );
+
+    return { submissions: list };
+  });
+
