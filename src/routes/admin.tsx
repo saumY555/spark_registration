@@ -23,6 +23,7 @@ import {
   Phone,
   Mail,
   UserCheck,
+  Globe,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -90,6 +91,18 @@ function formatTimestampIST(dateStr?: string | null): string {
   });
 }
 
+function formatDisplayUrl(raw?: string | null): string {
+  if (!raw) return "—";
+  try {
+    const url = new URL(raw);
+    const domain = url.hostname.replace(/^www\./, "");
+    const pathname = url.pathname === "/" ? "" : url.pathname;
+    return `${domain}${pathname}`;
+  } catch {
+    return raw.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+  }
+}
+
 function AdminPage() {
   const verifyPassFn = useServerFn(adminVerifyPassword);
   const getAppsFn = useServerFn(adminGetApplications);
@@ -109,6 +122,7 @@ function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTrack, setSelectedTrack] = useState("All Tracks");
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
+  const [linkFilter, setLinkFilter] = useState<"all" | "with_link" | "without_link">("all");
 
   const [activeCandidate, setActiveCandidate] = useState<ApplicationRecord | null>(null);
   const [editNotes, setEditNotes] = useState("");
@@ -248,13 +262,16 @@ function AdminPage() {
   const filteredApps = useMemo(() => {
     return applications.filter(app => {
       const q = searchQuery.toLowerCase().trim();
+      const hasLink = Boolean(app.portfolio_url && app.portfolio_url.trim().length > 0);
+
       const matchesSearch =
         !q ||
         app.full_name?.toLowerCase().includes(q) ||
         app.scholar_number?.toLowerCase().includes(q) ||
         app.institute_email?.toLowerCase().includes(q) ||
         app.phone_number?.toLowerCase().includes(q) ||
-        app.registration_no?.toLowerCase().includes(q);
+        app.registration_no?.toLowerCase().includes(q) ||
+        (app.portfolio_url && app.portfolio_url.toLowerCase().includes(q));
 
       const matchesTrack =
         selectedTrack === "All Tracks" ||
@@ -265,11 +282,16 @@ function AdminPage() {
         selectedStatus === "All Statuses" ||
         (app.status || "pending").toLowerCase() === selectedStatus.toLowerCase();
 
-      return matchesSearch && matchesTrack && matchesStatus;
-    });
-  }, [applications, searchQuery, selectedTrack, selectedStatus]);
+      const matchesLink =
+        linkFilter === "all" ||
+        (linkFilter === "with_link" && hasLink) ||
+        (linkFilter === "without_link" && !hasLink);
 
-  // Track Metrics
+      return matchesSearch && matchesTrack && matchesStatus && matchesLink;
+    });
+  }, [applications, searchQuery, selectedTrack, selectedStatus, linkFilter]);
+
+  // Track & Submission Metrics
   const metrics = useMemo(() => {
     const total = applications.length;
     const codeWeb = applications.filter(a => a.primary_track === "Code and Web").length;
@@ -277,10 +299,12 @@ function AdminPage() {
     const robotics = applications.filter(a => a.primary_track === "Hardware and Robotics").length;
     const design = applications.filter(a => a.primary_track === "Design and Media").length;
     const events = applications.filter(a => a.primary_track === "Events and Outreach").length;
+    const withLinks = applications.filter(a => Boolean(a.portfolio_url && a.portfolio_url.trim().length > 0)).length;
+    const withoutLinks = total - withLinks;
     const shortlisted = applications.filter(a => a.status === "shortlisted").length;
     const selected = applications.filter(a => a.status === "selected").length;
 
-    return { total, codeWeb, aiData, robotics, design, events, shortlisted, selected };
+    return { total, codeWeb, aiData, robotics, design, events, withLinks, withoutLinks, shortlisted, selected };
   }, [applications]);
 
   // Export to CSV
@@ -465,7 +489,7 @@ function AdminPage() {
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
         {/* Metrics Counter Bar */}
-        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
           <div className="border border-foreground/20 bg-card p-3 shadow-sm">
             <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Total Applicants</span>
             <p className="font-display text-3xl font-extrabold text-primary">{metrics.total}</p>
@@ -490,10 +514,79 @@ function AdminPage() {
             <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Events & PR</span>
             <p className="font-display text-2xl font-bold">{metrics.events}</p>
           </div>
+          {/* Submitted Links Card (Clickable Quick Filter) */}
+          <div
+            onClick={() => setLinkFilter(prev => (prev === "with_link" ? "all" : "with_link"))}
+            className={`cursor-pointer border p-3 shadow-sm transition-all hover:-translate-y-0.5 ${
+              linkFilter === "with_link"
+                ? "border-primary bg-primary/15 ring-2 ring-primary shadow-[3px_3px_0_var(--foreground)]"
+                : "border-foreground/20 bg-card hover:border-foreground"
+            }`}
+            title="Click to toggle: Show only candidates who submitted links"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase text-primary flex items-center gap-1">
+                <span>🔥</span> Submitted Links
+              </span>
+              {linkFilter === "with_link" && (
+                <span className="rounded bg-primary px-1 text-[9px] font-black uppercase text-primary-foreground">
+                  Active
+                </span>
+              )}
+            </div>
+            <p className="font-display text-2xl font-extrabold text-primary">{metrics.withLinks}</p>
+          </div>
           <div className="border border-foreground/20 bg-secondary/20 p-3 shadow-sm">
             <span className="text-[10px] font-extrabold uppercase text-foreground">Shortlisted</span>
             <p className="font-display text-2xl font-extrabold text-primary">{metrics.shortlisted}</p>
           </div>
+        </section>
+
+        {/* Dedicated Option Segment: View All vs With Submitted Links */}
+        <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border-2 border-foreground bg-muted/40 p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setLinkFilter("all")}
+              className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                linkFilter === "all"
+                  ? "bg-foreground text-background shadow-[2px_2px_0_var(--foreground)]"
+                  : "text-muted-foreground hover:bg-background hover:text-foreground"
+              }`}
+            >
+              All Candidates ({metrics.total})
+            </button>
+            <button
+              type="button"
+              onClick={() => setLinkFilter("with_link")}
+              className={`flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-black uppercase transition-all ${
+                linkFilter === "with_link"
+                  ? "bg-primary text-primary-foreground shadow-[2px_2px_0_var(--foreground)]"
+                  : "text-foreground hover:bg-primary/15"
+              }`}
+            >
+              <span className="text-sm">🔥</span>
+              <span>With Submitted Links ({metrics.withLinks})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLinkFilter("without_link")}
+              className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                linkFilter === "without_link"
+                  ? "bg-foreground text-background shadow-[2px_2px_0_var(--foreground)]"
+                  : "text-muted-foreground hover:bg-background hover:text-foreground"
+              }`}
+            >
+              No Link ({metrics.withoutLinks})
+            </button>
+          </div>
+
+          {linkFilter === "with_link" && (
+            <div className="inline-flex items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary animate-in fade-in duration-200">
+              <span className="flex size-2 rounded-full bg-primary animate-pulse" />
+              Showing <strong>{filteredApps.length}</strong> candidates who dropped a website or portfolio link
+            </div>
+          )}
         </section>
 
         {/* Search & Filter Bar */}
@@ -502,7 +595,7 @@ function AdminPage() {
             <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by name, scholar no, email, phone, or Registration ID…"
+              placeholder="Search by name, scholar no, email, phone, link domain, or Reg ID…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="pl-9 text-sm"
@@ -510,6 +603,20 @@ function AdminPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={linkFilter}
+              onChange={e => setLinkFilter(e.target.value as "all" | "with_link" | "without_link")}
+              className={`h-10 rounded-md border px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-ring ${
+                linkFilter === "with_link"
+                  ? "border-primary bg-primary/10 text-primary font-black"
+                  : "border-input bg-background"
+              }`}
+            >
+              <option value="all">Links: All Candidates</option>
+              <option value="with_link">🔥 With Submitted Links ({metrics.withLinks})</option>
+              <option value="without_link">Without Links ({metrics.withoutLinks})</option>
+            </select>
+
             <select
               value={selectedTrack}
               onChange={e => setSelectedTrack(e.target.value)}
@@ -534,7 +641,7 @@ function AdminPage() {
               ))}
             </select>
 
-            {(searchQuery || selectedTrack !== "All Tracks" || selectedStatus !== "All Statuses") && (
+            {(searchQuery || selectedTrack !== "All Tracks" || selectedStatus !== "All Statuses" || linkFilter !== "all") && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -542,6 +649,7 @@ function AdminPage() {
                   setSearchQuery("");
                   setSelectedTrack("All Tracks");
                   setSelectedStatus("All Statuses");
+                  setLinkFilter("all");
                 }}
                 className="text-xs font-bold"
               >
@@ -568,6 +676,7 @@ function AdminPage() {
                 <th className="p-3 font-extrabold uppercase">Scholar No</th>
                 <th className="p-3 font-extrabold uppercase">Contact</th>
                 <th className="p-3 font-extrabold uppercase">Tracks</th>
+                <th className="p-3 font-extrabold uppercase">Link / Build</th>
                 <th className="p-3 font-extrabold uppercase">Status</th>
                 <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
                 <th className="p-3 text-right font-extrabold uppercase">Action</th>
@@ -576,8 +685,12 @@ function AdminPage() {
             <tbody className="divide-y divide-foreground/10 font-medium">
               {filteredApps.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                    {isLoading ? "Loading candidates…" : "No matching candidate records found."}
+                  <td colSpan={10} className="p-8 text-center text-muted-foreground">
+                    {isLoading
+                      ? "Loading candidates…"
+                      : linkFilter === "with_link"
+                      ? "No candidates found with submitted links for this filter."
+                      : "No matching candidate records found."}
                   </td>
                 </tr>
               ) : (
@@ -620,6 +733,24 @@ function AdminPage() {
                           <div className="text-[11px] text-muted-foreground">
                             2nd: {app.secondary_track}
                           </div>
+                        )}
+                      </td>
+                      <td className="p-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                        {app.portfolio_url ? (
+                          <a
+                            href={app.portfolio_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group inline-flex items-center gap-1.5 rounded border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-black text-primary transition-all hover:bg-primary hover:text-primary-foreground hover:shadow-sm"
+                            title={app.portfolio_url}
+                          >
+                            <ExternalLink className="size-3 shrink-0" />
+                            <span className="max-w-[150px] truncate">
+                              {formatDisplayUrl(app.portfolio_url)}
+                            </span>
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs font-semibold">—</span>
                         )}
                       </td>
                       <td className="p-3 whitespace-nowrap">
@@ -734,21 +865,30 @@ function AdminPage() {
                   </p>
                 </div>
 
-                <div className="border border-foreground/20 bg-background p-3">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground">Portfolio / Links</span>
+                <div className={`p-3 border transition-colors ${activeCandidate.portfolio_url ? "border-primary/40 bg-primary/5" : "border-foreground/20 bg-background"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                      {activeCandidate.portfolio_url && <span>🔥</span>} Portfolio / Build Link
+                    </span>
+                    {activeCandidate.portfolio_url && (
+                      <span className="text-[9px] font-black uppercase rounded bg-primary px-1.5 py-0.2 text-primary-foreground">
+                        Submitted
+                      </span>
+                    )}
+                  </div>
                   {activeCandidate.portfolio_url ? (
-                    <p className="font-bold">
+                    <div className="mt-1.5 space-y-1">
                       <a
                         href={activeCandidate.portfolio_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-primary hover:underline break-all"
+                        className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground hover:bg-primary/90 transition-all break-all shadow-sm"
                       >
-                        <ExternalLink className="size-3 shrink-0" /> {activeCandidate.portfolio_url}
+                        <ExternalLink className="size-3.5 shrink-0" /> Open Live Build ({formatDisplayUrl(activeCandidate.portfolio_url)})
                       </a>
-                    </p>
+                    </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No portfolio link provided</p>
+                    <p className="text-xs text-muted-foreground mt-1">No portfolio or build link provided</p>
                   )}
                 </div>
               </div>
