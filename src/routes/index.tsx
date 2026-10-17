@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DropYourBuildModal } from "@/components/drop-your-build-modal";
-import { FeedbackWall } from "@/components/feedback-wall";
 import {
   lookupRegistration,
   REGISTRATIONS_OPEN,
@@ -381,7 +380,6 @@ function Index() {
         <nav className="hidden items-center gap-8 text-xs font-bold uppercase md:flex">
           <a href="#tracks" className="hover:text-primary">Tracks</a>
           <a href="#format" className="hover:text-primary">How it works</a>
-          <a href="#feedback" className="hover:text-primary">Feedback Wall</a>
           <a href="#register" className="hover:text-primary">{REGISTRATIONS_OPEN ? "Register" : "Status"}</a>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -1031,8 +1029,6 @@ function Index() {
         </div>
       </section>
 
-      <FeedbackWall />
-
       <footer className="border-t border-foreground/20 px-5 py-8 md:px-10">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-xs font-bold uppercase sm:flex-row sm:items-center">
           <div className="flex flex-col gap-1">
@@ -1040,9 +1036,6 @@ function Index() {
             <span className="text-[11px] text-muted-foreground">Society for Programming, Automation, Robotics and Knowledge</span>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <a href="#feedback" className="hover:text-primary transition-colors">
-              Feedback Wall 📝
-            </a>
             <div className="flex sm:hidden flex-wrap items-center gap-4">
               <Link
                 to="/admin"
