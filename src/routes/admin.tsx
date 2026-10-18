@@ -35,6 +35,7 @@ import {
   Trophy,
   Award,
   Edit3,
+  Loader2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -183,6 +184,8 @@ function AdminPage() {
 
   // Evaluation-First Modal state
   const [evalScholar, setEvalScholar] = useState<string | null>(null);
+  const [evalDraftScore, setEvalDraftScore] = useState<number | null>(null);
+  const [isDraftDirty, setIsDraftDirty] = useState(false);
   const [evalSuccessNotice, setEvalSuccessNotice] = useState<string | null>(null);
   const [showFullDetailsInEval, setShowFullDetailsInEval] = useState(false);
 
@@ -770,11 +773,55 @@ function AdminPage() {
     setShowFullDetailsInEval(false);
     setEvalSuccessNotice(null);
 
+    const evalRecord = evaluations[clean];
+    const adminKey = evaluatorName.trim().toLowerCase();
+    const existingScore = evalRecord?.scores?.[adminKey]?.score ?? null;
+    setEvalDraftScore(existingScore);
+    setIsDraftDirty(false);
+
     const app = applications.find(a => (a.scholar_number || "").toUpperCase().trim() === clean);
     if (app) {
       setEditStatus(app.status || "pending");
       const cleanNotes = (app.admin_notes || "").replace(/\[MARKS:[\s\S]*?\]/g, "").trim();
       setEditNotes(cleanNotes);
+    }
+  }
+
+  useEffect(() => {
+    if (!evalScholar) {
+      setEvalDraftScore(null);
+      setIsDraftDirty(false);
+      return;
+    }
+    const clean = evalScholar.toUpperCase().trim();
+    const evalRecord = evaluations[clean];
+    const adminKey = evaluatorName.trim().toLowerCase();
+    const existingScore = evalRecord?.scores?.[adminKey]?.score ?? null;
+    setEvalDraftScore(existingScore);
+    setIsDraftDirty(false);
+  }, [evalScholar]);
+
+  async function saveCurrentDraft(scholarToSave?: string, draftOverride?: number | null): Promise<boolean> {
+    const targetScholar = scholarToSave || evalScholar;
+    if (!targetScholar) return false;
+    const scholarKey = targetScholar.toUpperCase().trim();
+
+    const scoreToSave = draftOverride !== undefined ? draftOverride : evalDraftScore;
+    const adminKey = evaluatorName.trim().toLowerCase();
+    const currentSavedScore = evaluations[scholarKey]?.scores?.[adminKey]?.score ?? null;
+
+    if (scoreToSave === currentSavedScore && !isDraftDirty) {
+      setEvalSuccessNotice(scoreToSave !== null ? `✓ Saved ${scoreToSave}/100` : "✓ Mark cleared");
+      setTimeout(() => setEvalSuccessNotice(null), 2000);
+      return true;
+    }
+
+    try {
+      await handleSetScore(scholarKey, scoreToSave !== null ? String(scoreToSave) : "");
+      setIsDraftDirty(false);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -817,13 +864,19 @@ function AdminPage() {
   const canGoPrev = currentEvalIndex > 0;
   const canGoNext = currentEvalIndex >= 0 && currentEvalIndex < evaluationNavList.length - 1;
 
-  function goToNextCandidate() {
+  async function goToNextCandidate() {
+    if (evalScholar && isDraftDirty) {
+      await saveCurrentDraft(evalScholar, evalDraftScore);
+    }
     if (canGoNext) {
       openEvaluationModal(evaluationNavList[currentEvalIndex + 1]);
     }
   }
 
-  function goToPrevCandidate() {
+  async function goToPrevCandidate() {
+    if (evalScholar && isDraftDirty) {
+      await saveCurrentDraft(evalScholar, evalDraftScore);
+    }
     if (canGoPrev) {
       openEvaluationModal(evaluationNavList[currentEvalIndex - 1]);
     }
@@ -865,6 +918,12 @@ function AdminPage() {
         return;
       }
 
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveCurrentDraft();
+        return;
+      }
+
       if (e.key === "ArrowRight") {
         e.preventDefault();
         goToNextCandidate();
@@ -879,38 +938,40 @@ function AdminPage() {
 
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        const scholar = evalScholar.toUpperCase().trim();
-        const currentScore = evaluations[scholar]?.scores?.[evaluatorName.trim().toLowerCase()]?.score;
-        const newScore = Math.min(100, (currentScore !== undefined ? currentScore : 50) + 5);
-        handleSetScore(evalScholar, String(newScore));
+        const curr = evalDraftScore !== null ? evalDraftScore : 50;
+        const newScore = Math.min(100, curr + 5);
+        setEvalDraftScore(newScore);
+        setIsDraftDirty(true);
         return;
       }
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        const scholar = evalScholar.toUpperCase().trim();
-        const currentScore = evaluations[scholar]?.scores?.[evaluatorName.trim().toLowerCase()]?.score;
-        const newScore = Math.max(1, (currentScore !== undefined ? currentScore : 50) - 5);
-        handleSetScore(evalScholar, String(newScore));
+        const curr = evalDraftScore !== null ? evalDraftScore : 50;
+        const newScore = Math.max(1, curr - 5);
+        setEvalDraftScore(newScore);
+        setIsDraftDirty(true);
         return;
       }
 
       if (e.key >= "1" && e.key <= "9") {
         e.preventDefault();
-        handleSetScore(evalScholar, String(Number(e.key) * 10));
+        setEvalDraftScore(Number(e.key) * 10);
+        setIsDraftDirty(true);
         return;
       }
 
       if (e.key === "0") {
         e.preventDefault();
-        handleSetScore(evalScholar, "100");
+        setEvalDraftScore(100);
+        setIsDraftDirty(true);
         return;
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [evalScholar, currentEvalIndex, evaluationNavList, canGoPrev, canGoNext, evaluatorName, evaluations]);
+  }, [evalScholar, currentEvalIndex, evaluationNavList, canGoPrev, canGoNext, evaluatorName, evaluations, evalDraftScore, isDraftDirty]);
 
   // Export Builds to CSV with Marks and Rank
   function handleExportBuildsCsv() {
@@ -2219,6 +2280,8 @@ function AdminPage() {
                 <div className="hidden sm:flex items-center gap-1.5 text-[10px] opacity-75 font-mono">
                   <kbd className="px-1.5 py-0.5 rounded bg-background/20 font-bold">1-9, 0</kbd>
                   <span>Score</span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-background/20 ml-1 font-bold">Enter</kbd>
+                  <span>OK</span>
                   <kbd className="px-1.5 py-0.5 rounded bg-background/20 ml-1 font-bold">← / →</kbd>
                   <span>Navigate</span>
                   <kbd className="px-1.5 py-0.5 rounded bg-background/20 ml-1 font-bold">Esc</kbd>
@@ -2424,7 +2487,7 @@ function AdminPage() {
                 {(() => {
                   const evalRecord = evaluations[evalCandidate.scholarNumber];
                   const adminKey = evaluatorName.trim().toLowerCase();
-                  const myScore = evalRecord?.scores?.[adminKey]?.score;
+                  const mySavedScore = evalRecord?.scores?.[adminKey]?.score;
                   const isSavingThis = savingScholarNumber === evalCandidate.scholarNumber;
 
                   return (
@@ -2436,8 +2499,9 @@ function AdminPage() {
                             type="button"
                             disabled={isSavingThis}
                             onClick={() => {
-                              const curr = myScore !== undefined ? myScore : 50;
-                              handleSetScore(evalCandidate.scholarNumber, String(Math.max(1, curr - 10)));
+                              const curr = evalDraftScore !== null ? evalDraftScore : (mySavedScore ?? 50);
+                              setEvalDraftScore(Math.max(1, curr - 10));
+                              setIsDraftDirty(true);
                             }}
                             className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
                             title="Decrease by 10"
@@ -2448,8 +2512,9 @@ function AdminPage() {
                             type="button"
                             disabled={isSavingThis}
                             onClick={() => {
-                              const curr = myScore !== undefined ? myScore : 50;
-                              handleSetScore(evalCandidate.scholarNumber, String(Math.max(1, curr - 5)));
+                              const curr = evalDraftScore !== null ? evalDraftScore : (mySavedScore ?? 50);
+                              setEvalDraftScore(Math.max(1, curr - 5));
+                              setIsDraftDirty(true);
                             }}
                             className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
                             title="Decrease by 5"
@@ -2463,18 +2528,20 @@ function AdminPage() {
                             type="number"
                             min={1}
                             max={100}
-                            value={myScore !== undefined ? myScore : ""}
+                            value={evalDraftScore !== null ? evalDraftScore : ""}
                             placeholder="—"
                             disabled={isSavingThis}
                             onChange={(e) => {
                               const val = e.target.value;
                               if (val === "") {
-                                handleSetScore(evalCandidate.scholarNumber, "");
+                                setEvalDraftScore(null);
+                                setIsDraftDirty(true);
                                 return;
                               }
                               const num = parseInt(val, 10);
                               if (!isNaN(num)) {
-                                handleSetScore(evalCandidate.scholarNumber, String(Math.max(1, Math.min(100, num))));
+                                setEvalDraftScore(Math.max(1, Math.min(100, num)));
+                                setIsDraftDirty(true);
                               }
                             }}
                             className="w-20 text-center font-display text-3xl font-black bg-transparent border-b-2 border-amber-500 text-amber-500 focus:outline-none focus:border-amber-600"
@@ -2488,8 +2555,9 @@ function AdminPage() {
                             type="button"
                             disabled={isSavingThis}
                             onClick={() => {
-                              const curr = myScore !== undefined ? myScore : 50;
-                              handleSetScore(evalCandidate.scholarNumber, String(Math.min(100, curr + 5)));
+                              const curr = evalDraftScore !== null ? evalDraftScore : (mySavedScore ?? 50);
+                              setEvalDraftScore(Math.min(100, curr + 5));
+                              setIsDraftDirty(true);
                             }}
                             className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
                             title="Increase by 5"
@@ -2500,8 +2568,9 @@ function AdminPage() {
                             type="button"
                             disabled={isSavingThis}
                             onClick={() => {
-                              const curr = myScore !== undefined ? myScore : 50;
-                              handleSetScore(evalCandidate.scholarNumber, String(Math.min(100, curr + 10)));
+                              const curr = evalDraftScore !== null ? evalDraftScore : (mySavedScore ?? 50);
+                              setEvalDraftScore(Math.min(100, curr + 10));
+                              setIsDraftDirty(true);
                             }}
                             className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
                             title="Increase by 10"
@@ -2525,8 +2594,11 @@ function AdminPage() {
                           max={100}
                           step={1}
                           disabled={isSavingThis}
-                          value={myScore !== undefined ? myScore : 50}
-                          onChange={(e) => handleSetScore(evalCandidate.scholarNumber, e.target.value)}
+                          value={evalDraftScore !== null ? evalDraftScore : (mySavedScore ?? 50)}
+                          onChange={(e) => {
+                            setEvalDraftScore(Number(e.target.value));
+                            setIsDraftDirty(true);
+                          }}
                           className="w-full accent-amber-500 cursor-pointer h-2 bg-muted rounded-lg appearance-none"
                         />
                       </div>
@@ -2543,13 +2615,16 @@ function AdminPage() {
                         </div>
                         <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
                           {[30, 40, 50, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((preset) => {
-                            const isSelected = myScore === preset;
+                            const isSelected = evalDraftScore === preset;
                             return (
                               <button
                                 key={preset}
                                 type="button"
                                 disabled={isSavingThis}
-                                onClick={() => handleSetScore(evalCandidate.scholarNumber, String(preset))}
+                                onClick={() => {
+                                  setEvalDraftScore(preset);
+                                  setIsDraftDirty(true);
+                                }}
                                 className={`h-10 rounded-lg font-black text-xs transition-all flex flex-col items-center justify-center ${
                                   isSelected
                                     ? "bg-amber-500 text-black shadow-md ring-2 ring-amber-400 border border-amber-600 scale-105"
@@ -2560,7 +2635,7 @@ function AdminPage() {
                                 <span className="leading-none">{preset}</span>
                                 {isSelected && (
                                   <span className="text-[8px] uppercase tracking-tighter opacity-80 mt-0.5">
-                                    ★ Yours
+                                    {isDraftDirty ? "Selected" : "★ Saved"}
                                   </span>
                                 )}
                               </button>
@@ -2569,20 +2644,69 @@ function AdminPage() {
                         </div>
                       </div>
 
+                      {/* OK Button & Save Status Banner */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 bg-background border border-amber-500/30 rounded-xl p-3 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          {isDraftDirty ? (
+                            <div className="flex items-center gap-1.5 text-xs font-black text-amber-600 dark:text-amber-400 animate-pulse">
+                              <span className="size-2 rounded-full bg-amber-500" />
+                              <span>Draft: <strong>{evalDraftScore !== null ? `${evalDraftScore}/100` : "Cleared"}</strong> (Not saved yet)</span>
+                            </div>
+                          ) : mySavedScore !== undefined ? (
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
+                              <Check className="size-3.5 text-green-500" />
+                              <span>Saved in DB: <strong className="text-foreground font-black">{mySavedScore}/100</strong></span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground font-medium">
+                              Select marks above, then click <strong>OK</strong> or <strong>Next Candidate</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          disabled={isSavingThis || (!isDraftDirty && evalDraftScore === null)}
+                          onClick={() => saveCurrentDraft()}
+                          className={`font-black text-xs px-4 h-9 shadow-sm transition-all ${
+                            isDraftDirty
+                              ? "bg-amber-500 hover:bg-amber-600 text-black ring-2 ring-amber-400 font-black scale-105"
+                              : "bg-muted text-foreground hover:bg-muted/80 font-bold"
+                          }`}
+                        >
+                          {isSavingThis ? (
+                            <span className="flex items-center gap-1.5">
+                              <Loader2 className="size-3.5 animate-spin" /> Saving…
+                            </span>
+                          ) : isDraftDirty ? (
+                            <span className="flex items-center gap-1.5">
+                              <Check className="size-3.5 stroke-[3]" /> OK — Save Mark
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5">
+                              <Check className="size-3.5 text-green-500" /> OK (Saved)
+                            </span>
+                          )}
+                        </Button>
+                      </div>
+
                       {/* Clear mark option & Breakdown */}
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
-                        {myScore !== undefined ? (
+                        {evalDraftScore !== null || mySavedScore !== undefined ? (
                           <button
                             type="button"
-                            onClick={() => handleSetScore(evalCandidate.scholarNumber, "")}
+                            onClick={() => {
+                              setEvalDraftScore(null);
+                              setIsDraftDirty(true);
+                            }}
                             disabled={isSavingThis}
                             className="text-xs font-bold text-destructive hover:underline"
                           >
-                            ✕ Clear my mark ({myScore}/100)
+                            ✕ Clear my mark
                           </button>
                         ) : (
                           <span className="text-xs text-muted-foreground font-semibold">
-                            Pick a tier, adjust with slider/steppers, or type directly
+                            Drag slider, use steppers, or pick a tier
                           </span>
                         )}
 
@@ -2685,13 +2809,25 @@ function AdminPage() {
                   Close
                 </Button>
                 <Button
+                  type="button"
+                  variant={isDraftDirty ? "default" : "outline"}
+                  size="sm"
+                  disabled={isSavingThis || (!isDraftDirty && evalDraftScore === null)}
+                  onClick={() => saveCurrentDraft()}
+                  className={`font-black text-xs ${
+                    isDraftDirty ? "bg-amber-500 hover:bg-amber-600 text-black font-black" : ""
+                  }`}
+                >
+                  {isSavingThis ? "Saving…" : isDraftDirty ? "OK (Save Mark)" : "OK (Saved)"}
+                </Button>
+                <Button
                   variant="electric"
                   size="sm"
                   onClick={goToNextCandidate}
-                  disabled={!canGoNext}
+                  disabled={!canGoNext && !isDraftDirty}
                   className="font-bold text-xs"
                 >
-                  Next Candidate <ChevronRight className="size-4 ml-1" />
+                  {isDraftDirty ? "Save & Next" : "Next Candidate"} <ChevronRight className="size-4 ml-1" />
                 </Button>
               </div>
             </div>
