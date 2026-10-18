@@ -43,15 +43,42 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+      ? error
+      : "Unknown application error occurred";
+  const errorStack = error instanceof Error ? error.stack : null;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <div className="w-full max-w-lg text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+
+        {errorMessage && (
+          <div className="mt-4 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-left">
+            <p className="text-xs font-mono font-semibold text-destructive break-words">
+              {errorMessage}
+            </p>
+            {errorStack && (
+              <details className="mt-2 text-[11px] text-muted-foreground">
+                <summary className="cursor-pointer font-sans hover:underline">
+                  View technical details
+                </summary>
+                <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted/60 p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
+                  {errorStack}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
+
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {

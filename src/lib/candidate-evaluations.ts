@@ -15,17 +15,20 @@ export interface CandidateEvaluationRecord {
 /**
  * Calculates average and count from a record of admin scores (1 to 100)
  */
-export function calculateEvaluationSummary(scores: Record<string, AdminScoreItem>): {
+export function calculateEvaluationSummary(scores: Record<string, AdminScoreItem> | null | undefined): {
   average: number;
   count: number;
 } {
-  const list = Object.values(scores).filter((s) => typeof s.score === "number" && s.score >= 1 && s.score <= 100);
+  if (!scores || typeof scores !== "object") {
+    return { average: 0, count: 0 };
+  }
+  const list = Object.values(scores).filter((s) => s && typeof s.score === "number" && !Number.isNaN(s.score) && s.score >= 1 && s.score <= 100);
   if (list.length === 0) {
     return { average: 0, count: 0 };
   }
-  const sum = list.reduce((acc, curr) => acc + curr.score, 0);
+  const sum = list.reduce((acc, curr) => acc + (curr?.score ?? 0), 0);
   const average = Number((sum / list.length).toFixed(1));
-  return { average, count: list.length };
+  return { average: Number.isNaN(average) ? 0 : average, count: list.length };
 }
 
 /**

@@ -609,7 +609,13 @@ function AdminPage() {
 
     for (const scholar of scholarSet) {
       const evalRecord = evaluations[scholar];
-      if (evalRecord && evalRecord.count > 0 && evalRecord.average > 0) {
+      if (
+        evalRecord &&
+        evalRecord.count > 0 &&
+        typeof evalRecord.average === "number" &&
+        !Number.isNaN(evalRecord.average) &&
+        evalRecord.average > 0
+      ) {
         scoredList.push({
           scholarNumber: scholar,
           average: evalRecord.average,
@@ -661,7 +667,9 @@ function AdminPage() {
 
     // 1. Direct / local submissions
     for (const b of buildSubmissions) {
-      map.set(b.scholarNumber.toUpperCase().trim(), b);
+      if (b && b.scholarNumber) {
+        map.set(b.scholarNumber.toUpperCase().trim(), b);
+      }
     }
 
     // 2. Applications tagged with [DROP_YOUR_BUILD] in Supabase
@@ -724,33 +732,33 @@ function AdminPage() {
       const q = buildSearchQuery.toLowerCase().trim();
       list = list.filter(
         b =>
-          b.studentName.toLowerCase().includes(q) ||
-          b.scholarNumber.toLowerCase().includes(q) ||
-          b.websiteUrl.toLowerCase().includes(q) ||
-          (b.githubUrl && b.githubUrl.toLowerCase().includes(q)) ||
-          (b.track && b.track.toLowerCase().includes(q))
+          (b.studentName || "").toLowerCase().includes(q) ||
+          (b.scholarNumber || "").toLowerCase().includes(q) ||
+          (b.websiteUrl || "").toLowerCase().includes(q) ||
+          (b.githubUrl ? b.githubUrl.toLowerCase().includes(q) : false) ||
+          (b.track ? b.track.toLowerCase().includes(q) : false)
       );
     }
 
     if (buildMarksFilter === "rated") {
-      list = list.filter(b => candidateRankMap.has(b.scholarNumber.toUpperCase().trim()));
+      list = list.filter(b => b.scholarNumber && candidateRankMap.has(b.scholarNumber.toUpperCase().trim()));
     } else if (buildMarksFilter === "unrated") {
-      list = list.filter(b => !candidateRankMap.has(b.scholarNumber.toUpperCase().trim()));
+      list = list.filter(b => b.scholarNumber && !candidateRankMap.has(b.scholarNumber.toUpperCase().trim()));
     }
 
     if (buildSortBy === "rank") {
       return list.sort((a, b) => {
-        const rankA = candidateRankMap.get(a.scholarNumber.toUpperCase().trim())?.rank ?? Infinity;
-        const rankB = candidateRankMap.get(b.scholarNumber.toUpperCase().trim())?.rank ?? Infinity;
+        const rankA = candidateRankMap.get((a.scholarNumber || "").toUpperCase().trim())?.rank ?? Infinity;
+        const rankB = candidateRankMap.get((b.scholarNumber || "").toUpperCase().trim())?.rank ?? Infinity;
         if (rankA !== rankB) {
           return rankA - rankB;
         }
-        return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+        return new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime();
       });
     }
 
     return list.sort(
-      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+      (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
     );
   }, [buildSubmissions, applications, buildSourceFilter, buildSearchQuery, buildMarksFilter, buildSortBy, candidateRankMap]);
 
@@ -851,7 +859,7 @@ function AdminPage() {
 
   const evaluationNavList = useMemo(() => {
     if (adminView === "drop_builds") {
-      return displayBuilds.map(b => b.scholarNumber.toUpperCase().trim()).filter(Boolean);
+      return displayBuilds.map(b => (b.scholarNumber || "").toUpperCase().trim()).filter(Boolean);
     }
     return filteredApps.map(a => (a.scholar_number || "").toUpperCase().trim()).filter(Boolean);
   }, [adminView, displayBuilds, filteredApps]);
@@ -997,9 +1005,9 @@ function AdminPage() {
     ];
 
     const rows = displayBuilds.map(b => {
-      const scholar = b.scholarNumber.toUpperCase().trim();
+      const scholar = (b.scholarNumber || "").toUpperCase().trim();
       const rankInfo = candidateRankMap.get(scholar);
-      const evalRecord = evaluations[scholar];
+      const evalRecord = scholar ? evaluations[scholar] : undefined;
       const breakdown = evalRecord?.scores
         ? Object.values(evalRecord.scores)
             .map(s => `${s.adminName}:${s.score}`)
@@ -1008,12 +1016,12 @@ function AdminPage() {
 
       return [
         `"${rankInfo ? rankInfo.rank : "Unranked"}"`,
-        `"${rankInfo ? rankInfo.average : ""}"`,
+        `"${rankInfo && typeof rankInfo.average === "number" ? rankInfo.average.toFixed(1) : ""}"`,
         `"${rankInfo ? rankInfo.count : 0}"`,
         `"${breakdown.replace(/"/g, '""')}"`,
-        `"${b.scholarNumber}"`,
-        `"${b.studentName.replace(/"/g, '""')}"`,
-        `"${b.websiteUrl}"`,
+        `"${b.scholarNumber || ""}"`,
+        `"${(b.studentName || "").replace(/"/g, '""')}"`,
+        `"${b.websiteUrl || ""}"`,
         `"${b.githubUrl || ""}"`,
         `"${formatTimestampIST(b.submittedAt)}"`,
         `"${b.isRegisteredCandidate ? "Registered" : "Walk-in"}"`,
@@ -1037,7 +1045,9 @@ function AdminPage() {
   // Evaluated builds count for quick status
   const evaluatedBuildsCount = useMemo(() => {
     return displayBuilds.filter(b => {
-      const r = candidateRankMap.get(b.scholarNumber.toUpperCase().trim());
+      const scholar = (b.scholarNumber || "").toUpperCase().trim();
+      if (!scholar) return false;
+      const r = candidateRankMap.get(scholar);
       return Boolean(r && r.count > 0);
     }).length;
   }, [displayBuilds, candidateRankMap]);
@@ -1047,7 +1057,7 @@ function AdminPage() {
     const rated = displayBuilds
       .map(b => ({
         build: b,
-        rankInfo: candidateRankMap.get(b.scholarNumber.toUpperCase().trim()),
+        rankInfo: candidateRankMap.get((b.scholarNumber || "").toUpperCase().trim()),
       }))
       .filter(x => Boolean(x.rankInfo && x.rankInfo.count > 0));
     rated.sort((a, b) => (a.rankInfo?.rank ?? Infinity) - (b.rankInfo?.rank ?? Infinity));
@@ -1401,7 +1411,7 @@ function AdminPage() {
                 </p>
                 <p className="text-[11px] font-extrabold text-primary mt-0.5 truncate">
                   {topRankedBuild?.rankInfo
-                    ? `⭐ ${topRankedBuild.rankInfo.average.toFixed(1)}/100 (Rank #${topRankedBuild.rankInfo.rank})`
+                    ? `⭐ ${(topRankedBuild.rankInfo.average ?? 0).toFixed(1)}/100 (Rank #${topRankedBuild.rankInfo.rank ?? "—"})`
                     : "Awaiting marks"}
                 </p>
               </div>
@@ -1539,7 +1549,7 @@ function AdminPage() {
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      ⭐ Evaluated ({displayBuilds.filter(b => candidateRankMap.has(b.scholarNumber.toUpperCase().trim())).length})
+                      ⭐ Evaluated ({displayBuilds.filter(b => b.scholarNumber && candidateRankMap.has(b.scholarNumber.toUpperCase().trim())).length})
                     </button>
                     <button
                       type="button"
@@ -1550,7 +1560,7 @@ function AdminPage() {
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      ⏳ Unrated ({displayBuilds.filter(b => !candidateRankMap.has(b.scholarNumber.toUpperCase().trim())).length})
+                      ⏳ Unrated ({displayBuilds.filter(b => !b.scholarNumber || !candidateRankMap.has(b.scholarNumber.toUpperCase().trim())).length})
                     </button>
                   </div>
                 </div>
@@ -1617,9 +1627,9 @@ function AdminPage() {
                     </tr>
                   ) : (
                     displayBuilds.map((build, index) => {
-                      const scholarKey = build.scholarNumber.toUpperCase().trim();
+                      const scholarKey = (build.scholarNumber || "").toUpperCase().trim();
                       const rankInfo = candidateRankMap.get(scholarKey);
-                      const evalRecord = evaluations[scholarKey];
+                      const evalRecord = scholarKey ? evaluations[scholarKey] : undefined;
                       const adminKey = evaluatorName.trim().toLowerCase();
                       const myScoreItem = evalRecord?.scores?.[adminKey];
                       const myScore = myScoreItem?.score;
@@ -1631,19 +1641,19 @@ function AdminPage() {
                             .join(", ")
                         : "";
 
-                      const isDropStation =
-                        buildSubmissions.some(b => b.scholarNumber.toUpperCase().trim() === build.scholarNumber.toUpperCase().trim()) ||
+                      const isDropBuild =
+                        buildSubmissions.some(b => (b.scholarNumber || "").toUpperCase().trim() === scholarKey) ||
                         applications.some(
                           a =>
-                            (a.scholar_number || "").toUpperCase().trim() === build.scholarNumber.toUpperCase().trim() &&
+                            (a.scholar_number || "").toUpperCase().trim() === scholarKey &&
                             a.admin_notes &&
                             a.admin_notes.includes("[DROP_YOUR_BUILD]")
                         );
 
                       return (
                         <tr
-                          key={build.id || build.scholarNumber}
-                          onClick={() => openEvaluationModal(build.scholarNumber)}
+                          key={build.id || build.scholarNumber || index}
+                          onClick={() => openEvaluationModal(build.scholarNumber || "")}
                           className="transition-all hover:bg-primary/5 hover:border-l-4 hover:border-l-primary cursor-pointer group"
                           title="Click to evaluate candidate marks (1-100)"
                         >
@@ -1661,7 +1671,7 @@ function AdminPage() {
                                       ? "bg-amber-600 text-white font-black"
                                       : "bg-muted text-foreground border border-foreground/10"
                                   }`}
-                                  title={`Rank #${rankInfo.rank} across whole candidate list (Avg: ${rankInfo.average.toFixed(1)}/100)`}
+                                  title={`Rank #${rankInfo.rank} across whole candidate list (Avg: ${(rankInfo.average ?? 0).toFixed(1)}/100)`}
                                 >
                                   {rankInfo.rank <= 3 ? `🏆 #${rankInfo.rank}` : `#${rankInfo.rank}`}
                                 </span>
@@ -1676,7 +1686,7 @@ function AdminPage() {
                           </td>
                           <td className="p-3 uppercase font-extrabold">
                             <span className="font-mono bg-muted/60 px-2 py-0.5 rounded border border-foreground/10">
-                              {build.scholarNumber}
+                              {build.scholarNumber || "—"}
                             </span>
                           </td>
                           <td className="p-3 whitespace-nowrap">
@@ -1737,10 +1747,10 @@ function AdminPage() {
                                   <>
                                     <span
                                       className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400"
-                                      title={`Average: ${rankInfo.average.toFixed(1)}/100 from ${rankInfo.count} admin evaluation${rankInfo.count > 1 ? "s" : ""}: ${scoresBreakdown}`}
+                                      title={`Average: ${(rankInfo.average ?? 0).toFixed(1)}/100 from ${rankInfo.count} admin evaluation${rankInfo.count > 1 ? "s" : ""}: ${scoresBreakdown}`}
                                     >
                                       <Star className="size-3 fill-amber-500 text-amber-500" />
-                                      <span>{rankInfo.average.toFixed(1)}</span>
+                                      <span>{(rankInfo.average ?? 0).toFixed(1)}</span>
                                       <span className="text-[10px] text-muted-foreground font-semibold">/100</span>
                                     </span>
 
@@ -1794,7 +1804,7 @@ function AdminPage() {
                                 {evalRecord && evalRecord.count > 0 && (
                                   <span
                                     className="text-[10px] font-bold text-muted-foreground cursor-help underline decoration-dotted"
-                                    title={`Evaluations breakdown:\n${scoresBreakdown}\nAverage: ${evalRecord.average.toFixed(1)}/100`}
+                                    title={`Evaluations breakdown:\n${scoresBreakdown}\nAverage: ${(evalRecord?.average ?? 0).toFixed(1)}/100`}
                                   >
                                     {evalRecord.count} {evalRecord.count === 1 ? "admin" : "admins"}
                                   </span>
@@ -2180,10 +2190,10 @@ function AdminPage() {
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span
                                     className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400"
-                                    title={`Average: ${rankInfo.average.toFixed(1)}/100 from ${rankInfo.count} admin evaluations`}
+                                    title={`Average: ${(rankInfo.average ?? 0).toFixed(1)}/100 from ${rankInfo.count} admin evaluations`}
                                   >
                                     <Star className="size-3 fill-amber-500 text-amber-500" />
-                                    <span>{rankInfo.average.toFixed(1)}</span>
+                                    <span>{(rankInfo.average ?? 0).toFixed(1)}</span>
                                     <span className="text-[10px] text-muted-foreground font-semibold">/100</span>
                                   </span>
                                   <span
@@ -2344,7 +2354,7 @@ function AdminPage() {
                       <>
                         <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 px-3 py-1 font-black text-amber-600 dark:text-amber-400">
                           <Star className="size-4 fill-amber-500 text-amber-500" />
-                          <span className="text-lg leading-none">{rankInfo.average.toFixed(1)}</span>
+                          <span className="text-lg leading-none">{(rankInfo.average ?? 0).toFixed(1)}</span>
                           <span className="text-xs text-muted-foreground font-bold">/100</span>
                           <span className="text-[10px] text-muted-foreground ml-1">
                             ({rankInfo.count} review{rankInfo.count > 1 ? "s" : ""})
@@ -2938,7 +2948,7 @@ function AdminPage() {
               </div>
 
               {/* Drop Your Build Specific Highlight */}
-              {(dropBuildScholarSet.has(activeCandidate.scholar_number?.toUpperCase().trim()) ||
+              {(dropBuildScholarSet.has((activeCandidate.scholar_number || "").toUpperCase().trim()) ||
                 activeCandidate.admin_notes?.includes("[DROP_YOUR_BUILD]")) && (
                 <div className="rounded border-2 border-primary bg-primary/10 p-3.5 shadow-sm">
                   <div className="flex items-center justify-between">
@@ -2981,7 +2991,7 @@ function AdminPage() {
                     return (
                       <div className="flex items-center gap-1.5">
                         <span className="rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400">
-                          ⭐ {rankInfo.average.toFixed(1)} / 100
+                          ⭐ {(rankInfo.average ?? 0).toFixed(1)} / 100
                         </span>
                         <span className="rounded bg-yellow-400 px-2 py-0.5 text-xs font-black text-black">
                           🏆 Rank #{rankInfo.rank} of {rankInfo.totalRanked}

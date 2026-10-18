@@ -99,6 +99,9 @@ export async function getAllEvaluations(): Promise<Record<string, CandidateEvalu
     } else {
       let merged = false;
       for (const [adminKey, localScore] of Object.entries(localRecord.scores || {})) {
+        if (!dbRecord.scores) {
+          dbRecord.scores = {};
+        }
         const dbScore = dbRecord.scores[adminKey];
         if (!dbScore) {
           dbRecord.scores[adminKey] = localScore;
@@ -219,7 +222,7 @@ export async function saveEvaluation(
       count: 0,
       lastUpdated: new Date().toISOString(),
     };
-    existingScores = { ...existing.scores };
+    existingScores = { ...(existing.scores || {}) };
 
     if (score === null || score === 0) {
       delete existingScores[adminKey];
