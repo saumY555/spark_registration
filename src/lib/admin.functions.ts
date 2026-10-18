@@ -71,7 +71,25 @@ export const adminUpdateApplication = createServerFn({ method: "POST" })
       updatePayload.status = data.status;
     }
     if (data.adminNotes !== undefined) {
-      updatePayload.admin_notes = data.adminNotes;
+      if (data.adminNotes !== null) {
+        // Fetch existing application note to preserve any existing [MARKS:...] tag
+        const { data: existingApp } = await supabaseAdmin
+          .from("applications")
+          .select("admin_notes")
+          .eq("id", data.id)
+          .maybeSingle();
+
+        const existingNotes = existingApp?.admin_notes || "";
+        const marksMatch = existingNotes.match(/\[MARKS:[\s\S]*?\]/);
+        let finalNotes = data.adminNotes.trim();
+
+        if (marksMatch && !finalNotes.includes("[MARKS:")) {
+          finalNotes = finalNotes ? `${finalNotes} ${marksMatch[0]}` : marksMatch[0];
+        }
+        updatePayload.admin_notes = finalNotes || null;
+      } else {
+        updatePayload.admin_notes = null;
+      }
     }
 
     const { data: updated, error } = await supabaseAdmin

@@ -35,6 +35,8 @@ import {
   Trophy,
   Award,
   Edit3,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 import { useEffect, useMemo, useState } from "react";
@@ -50,9 +52,14 @@ import {
   adminGetEvaluations,
   adminSaveEvaluation,
   type AdminBuildSubmissionItem,
+} from "@/lib/admin.functions";
+import {
+  decodeMarksFromNotes,
+  encodeMarksToNotes,
+  calculateEvaluationSummary,
   type CandidateEvaluationRecord,
   type AdminScoreItem,
-} from "@/lib/admin.functions";
+} from "@/lib/candidate-evaluations";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -174,6 +181,11 @@ function AdminPage() {
   const [tempEvaluatorName, setTempEvaluatorName] = useState("");
   const [savingScholarNumber, setSavingScholarNumber] = useState<string | null>(null);
 
+  // Evaluation-First Modal state
+  const [evalScholar, setEvalScholar] = useState<string | null>(null);
+  const [evalSuccessNotice, setEvalSuccessNotice] = useState<string | null>(null);
+  const [showFullDetailsInEval, setShowFullDetailsInEval] = useState(false);
+
   // Drop Your Build Station state
   const [buildSubmissions, setBuildSubmissions] = useState<AdminBuildSubmissionItem[]>([]);
   const [isLoadingBuilds, setIsLoadingBuilds] = useState(false);
@@ -258,7 +270,30 @@ function AdminPage() {
 
     try {
       const res = await getAppsFn({ data: { password: pass } });
-      setApplications(res.applications as ApplicationRecord[]);
+      const apps = (res.applications || []) as ApplicationRecord[];
+      setApplications(apps);
+
+      // Instantly extract evaluations directly from database applications records
+      const dbEvals: Record<string, CandidateEvaluationRecord> = {};
+      for (const app of apps) {
+        const scholar = (app.scholar_number || "").toUpperCase().trim();
+        if (!scholar || !app.admin_notes) continue;
+        const decoded = decodeMarksFromNotes(app.admin_notes);
+        if (decoded && Object.keys(decoded).length > 0) {
+          const { average, count } = calculateEvaluationSummary(decoded);
+          dbEvals[scholar] = {
+            scholarNumber: scholar,
+            scores: decoded,
+            average,
+            count,
+            lastUpdated: app.updated_at || new Date().toISOString(),
+          };
+        }
+      }
+      if (Object.keys(dbEvals).length > 0) {
+        setEvaluations(prev => ({ ...prev, ...dbEvals }));
+      }
+
       loadBuildSubmissions(pass, true);
       loadEvaluations(pass);
     } catch (err) {
@@ -332,7 +367,9 @@ function AdminPage() {
     const scholarKey = scholarNumber.toUpperCase().trim();
     setSavingScholarNumber(scholarKey);
 
-    // Instant optimistic update
+    const adminKey = reviewer.trim().toLowerCase();
+
+    // 1. Instant optimistic update to evaluations state
     setEvaluations((prev) => {
       const existing = prev[scholarKey] || {
         scholarNumber: scholarKey,
@@ -342,7 +379,6 @@ function AdminPage() {
         lastUpdated: new Date().toISOString(),
       };
       const updatedScores = { ...existing.scores };
-      const adminKey = reviewer.trim().toLowerCase();
 
       if (score === null || score === 0) {
         delete updatedScores[adminKey];
@@ -354,24 +390,43 @@ function AdminPage() {
         };
       }
 
-      const list = Object.values(updatedScores).filter((s) => s.score >= 1 && s.score <= 10);
-      const avg =
-        list.length > 0
-          ? Number((list.reduce((acc, c) => acc + c.score, 0) / list.length).toFixed(1))
-          : 0;
+      const { average, count } = calculateEvaluationSummary(updatedScores);
 
       return {
         ...prev,
         [scholarKey]: {
           ...existing,
           scores: updatedScores,
-          average: avg,
-          count: list.length,
+          average,
+          count,
           lastUpdated: new Date().toISOString(),
         },
       };
     });
 
+    // 2. Instant optimistic update to applications state in memory
+    setApplications(prev =>
+      prev.map(a => {
+        if ((a.scholar_number || "").toUpperCase().trim() === scholarKey) {
+          const currentScores = decodeMarksFromNotes(a.admin_notes) || {};
+          const nextScores = { ...currentScores };
+          if (score === null || score === 0) {
+            delete nextScores[adminKey];
+          } else {
+            nextScores[adminKey] = {
+              adminName: reviewer,
+              score,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          const updatedNotes = encodeMarksToNotes(a.admin_notes, nextScores);
+          return { ...a, admin_notes: updatedNotes };
+        }
+        return a;
+      })
+    );
+
+    // 3. Persist to server & database
     try {
       const res = await saveEvaluationFn({
         data: {
@@ -385,6 +440,8 @@ function AdminPage() {
       if (res.evaluations) {
         setEvaluations(res.evaluations);
       }
+      setEvalSuccessNotice(score ? `✓ Saved ${score}/10` : "✓ Mark cleared");
+      setTimeout(() => setEvalSuccessNotice(null), 2000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to save candidate marks.");
       loadEvaluations(password);
@@ -406,7 +463,8 @@ function AdminPage() {
   // Open detail modal
   function openCandidateDetails(cand: ApplicationRecord) {
     setActiveCandidate(cand);
-    setEditNotes(cand.admin_notes || "");
+    const cleanNotes = (cand.admin_notes || "").replace(/\[MARKS:[\s\S]*?\]/g, "").trim();
+    setEditNotes(cleanNotes);
     setEditStatus(cand.status || "pending");
     setSaveSuccessMsg("");
   }
@@ -418,7 +476,7 @@ function AdminPage() {
     setSaveSuccessMsg("");
 
     try {
-      await updateAppFn({
+      const res = await updateAppFn({
         data: {
           password,
           id: activeCandidate.id,
@@ -427,16 +485,17 @@ function AdminPage() {
         },
       });
 
+      const updatedApp = res.application;
       setApplications(prev =>
         prev.map(a =>
           a.id === activeCandidate.id
-            ? { ...a, status: editStatus, admin_notes: editNotes.trim() || null }
+            ? { ...a, status: editStatus, admin_notes: updatedApp?.admin_notes || a.admin_notes }
             : a
         )
       );
 
       setActiveCandidate(prev =>
-        prev ? { ...prev, status: editStatus, admin_notes: editNotes.trim() || null } : null
+        prev ? { ...prev, status: editStatus, admin_notes: updatedApp?.admin_notes || prev.admin_notes } : null
       );
 
       setSaveSuccessMsg("Changes saved successfully!");
@@ -703,6 +762,137 @@ function AdminPage() {
     setCopiedAllUrlsMsg(`Copied ${urls.length} URLs!`);
     setTimeout(() => setCopiedAllUrlsMsg(""), 3000);
   }
+
+  function openEvaluationModal(scholarNumber: string) {
+    if (!scholarNumber) return;
+    const clean = scholarNumber.toUpperCase().trim();
+    setEvalScholar(clean);
+    setShowFullDetailsInEval(false);
+    setEvalSuccessNotice(null);
+
+    const app = applications.find(a => (a.scholar_number || "").toUpperCase().trim() === clean);
+    if (app) {
+      setEditStatus(app.status || "pending");
+      const cleanNotes = (app.admin_notes || "").replace(/\[MARKS:[\s\S]*?\]/g, "").trim();
+      setEditNotes(cleanNotes);
+    }
+  }
+
+  const evalCandidate = useMemo(() => {
+    if (!evalScholar) return null;
+    const scholarKey = evalScholar.toUpperCase().trim();
+    const app = applications.find(a => (a.scholar_number || "").toUpperCase().trim() === scholarKey);
+    const build = buildSubmissions.find(b => (b.scholarNumber || "").toUpperCase().trim() === scholarKey);
+
+    return {
+      scholarNumber: scholarKey,
+      name: app?.full_name || build?.studentName || `Candidate ${scholarKey}`,
+      registrationNo: app?.registration_no,
+      email: app?.institute_email || build?.email,
+      phone: app?.phone_number || build?.phone,
+      primaryTrack: app?.primary_track || build?.track || "General Track",
+      secondaryTrack: app?.secondary_track,
+      status: app?.status || build?.status || "pending",
+      appId: app?.id,
+      motivation: app?.motivation,
+      createdAt: app?.created_at || build?.submittedAt,
+      websiteUrl: build?.websiteUrl || (app?.portfolio_url && app.portfolio_url.trim().length > 0 ? app.portfolio_url : null),
+      githubUrl: build?.githubUrl || null,
+      isDropBuild: Boolean(build) || (app?.admin_notes?.includes("[DROP_YOUR_BUILD]") ?? false),
+    };
+  }, [evalScholar, applications, buildSubmissions]);
+
+  const evaluationNavList = useMemo(() => {
+    if (adminView === "drop_builds") {
+      return displayBuilds.map(b => b.scholarNumber.toUpperCase().trim()).filter(Boolean);
+    }
+    return filteredApps.map(a => (a.scholar_number || "").toUpperCase().trim()).filter(Boolean);
+  }, [adminView, displayBuilds, filteredApps]);
+
+  const currentEvalIndex = useMemo(() => {
+    if (!evalScholar) return -1;
+    return evaluationNavList.indexOf(evalScholar.toUpperCase().trim());
+  }, [evalScholar, evaluationNavList]);
+
+  const canGoPrev = currentEvalIndex > 0;
+  const canGoNext = currentEvalIndex >= 0 && currentEvalIndex < evaluationNavList.length - 1;
+
+  function goToNextCandidate() {
+    if (canGoNext) {
+      openEvaluationModal(evaluationNavList[currentEvalIndex + 1]);
+    }
+  }
+
+  function goToPrevCandidate() {
+    if (canGoPrev) {
+      openEvaluationModal(evaluationNavList[currentEvalIndex - 1]);
+    }
+  }
+
+  async function handleQuickUpdateStatus(appId: string | undefined, newStatus: string) {
+    if (!appId) return;
+    setEditStatus(newStatus);
+    try {
+      await updateAppFn({
+        data: {
+          password,
+          id: appId,
+          status: newStatus,
+        },
+      });
+      setApplications(prev => prev.map(a => (a.id === appId ? { ...a, status: newStatus } : a)));
+      setEvalSuccessNotice(`✓ Marked as ${newStatus}`);
+      setTimeout(() => setEvalSuccessNotice(null), 2000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update status.");
+    }
+  }
+
+  useEffect(() => {
+    if (!evalScholar) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = document.activeElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")
+      ) {
+        return;
+      }
+
+      if (e.key === "Escape") {
+        setEvalScholar(null);
+        return;
+      }
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToNextCandidate();
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToPrevCandidate();
+        return;
+      }
+
+      if (e.key >= "1" && e.key <= "9") {
+        e.preventDefault();
+        handleSetScore(evalScholar, e.key);
+        return;
+      }
+
+      if (e.key === "0") {
+        e.preventDefault();
+        handleSetScore(evalScholar, "10");
+        return;
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [evalScholar, currentEvalIndex, evaluationNavList, canGoPrev, canGoNext, evaluatorName]);
 
   // Export Builds to CSV with Marks and Rank
   function handleExportBuildsCsv() {
@@ -1372,7 +1562,12 @@ function AdminPage() {
                         );
 
                       return (
-                        <tr key={build.id || build.scholarNumber} className="transition-colors hover:bg-muted/40">
+                        <tr
+                          key={build.id || build.scholarNumber}
+                          onClick={() => openEvaluationModal(build.scholarNumber)}
+                          className="transition-all hover:bg-primary/5 hover:border-l-4 hover:border-l-primary cursor-pointer group"
+                          title="Click to evaluate candidate marks (1-10)"
+                        >
                           <td className="p-3 text-muted-foreground font-bold whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
                               <span>{index + 1}</span>
@@ -1555,13 +1750,21 @@ function AdminPage() {
                               )}
                             </div>
                           </td>
-                          <td className="p-3 text-right whitespace-nowrap">
+                          <td className="p-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEvaluationModal(build.scholarNumber)}
+                                className="h-8 px-2.5 text-xs font-bold border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-600"
+                              >
+                                <Star className="mr-1 size-3.5 fill-amber-500 text-amber-500" /> Evaluate
+                              </Button>
                               <a
                                 href={build.websiteUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
+                                className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
                               >
                                 <ExternalLink className="size-3" /> Open
                               </a>
@@ -1826,8 +2029,9 @@ function AdminPage() {
                       return (
                         <tr
                           key={app.id}
-                          className="transition-colors hover:bg-muted/40 cursor-pointer"
-                          onClick={() => openCandidateDetails(app)}
+                          className="transition-all hover:bg-primary/5 hover:border-l-4 hover:border-l-primary cursor-pointer group"
+                          onClick={() => openEvaluationModal(app.scholar_number)}
+                          title="Click candidate to evaluate marks (1-10)"
                         >
                           <td className="p-3 text-muted-foreground font-bold">{index + 1}</td>
                           <td className="p-3 font-extrabold text-primary whitespace-nowrap">
@@ -1931,10 +2135,19 @@ function AdminPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => openCandidateDetails(app)}
-                                className="h-8 px-2 text-xs font-bold"
+                                onClick={() => openEvaluationModal(app.scholar_number)}
+                                className="h-8 px-2.5 text-xs font-bold border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-600"
                               >
-                                <Eye className="mr-1 size-3.5" /> View
+                                <Star className="mr-1 size-3.5 fill-amber-500 text-amber-500" /> Evaluate
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openCandidateDetails(app)}
+                                className="h-8 px-2 text-xs font-bold text-muted-foreground hover:text-foreground"
+                                title="View full registration application"
+                              >
+                                <Eye className="size-3.5" />
                               </Button>
                               <Button
                                 variant="outline"
@@ -1957,6 +2170,399 @@ function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* DEDICATED EVALUATION-FIRST MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {evalCandidate && evalScholar && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setEvalScholar(null)}
+        >
+          <div
+            className="relative flex max-h-[94vh] w-full max-w-2xl flex-col rounded-xl border-2 border-foreground bg-card shadow-[14px_14px_0_var(--primary)] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Bar: Navigation & Keyboard Hints */}
+            <div className="flex items-center justify-between border-b-2 border-foreground bg-foreground text-background px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded bg-amber-400 px-2 py-0.5 text-[11px] font-black uppercase text-black tracking-wide shadow-sm">
+                  <Star className="size-3 fill-black text-black" /> Evaluation Mode
+                </span>
+                <span className="text-xs font-bold opacity-80">
+                  Candidate {currentEvalIndex + 1} of {evaluationNavList.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1.5 text-[10px] opacity-75 font-mono">
+                  <kbd className="px-1.5 py-0.5 rounded bg-background/20 font-bold">1-9, 0</kbd>
+                  <span>Score</span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-background/20 ml-1 font-bold">← / →</kbd>
+                  <span>Navigate</span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-background/20 ml-1 font-bold">Esc</kbd>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEvalScholar(null)}
+                  className="rounded-md p-1 hover:bg-background/20 text-background transition-colors"
+                  title="Close evaluation modal (Esc)"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="space-y-4 overflow-y-auto p-4 sm:p-5 text-sm">
+              {/* Candidate Info Header */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pb-3 border-b border-foreground/15">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-black uppercase bg-muted px-2 py-0.5 rounded border border-foreground/15 text-foreground">
+                      {evalCandidate.scholarNumber}
+                    </span>
+                    {evalCandidate.registrationNo && (
+                      <span className="text-[11px] font-bold text-muted-foreground">
+                        {evalCandidate.registrationNo}
+                      </span>
+                    )}
+                    <span className="rounded bg-primary/10 border border-primary/30 px-2 py-0.5 text-xs font-black text-primary uppercase">
+                      {evalCandidate.primaryTrack}
+                    </span>
+                    {evalCandidate.secondaryTrack && (
+                      <span className="text-[11px] text-muted-foreground font-semibold">
+                        2nd: {evalCandidate.secondaryTrack}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="mt-1 font-display text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">
+                    {evalCandidate.name}
+                  </h2>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                    {evalCandidate.email && <span>{evalCandidate.email}</span>}
+                    {evalCandidate.phone && <span>• {evalCandidate.phone}</span>}
+                  </div>
+                </div>
+
+                {/* Score & Rank Badges */}
+                <div className="flex sm:flex-col items-center sm:items-end gap-2 shrink-0">
+                  {(() => {
+                    const rankInfo = candidateRankMap.get(evalCandidate.scholarNumber);
+                    if (!rankInfo || rankInfo.count === 0) {
+                      return (
+                        <span className="rounded bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground border border-foreground/10">
+                          Unrated Candidate
+                        </span>
+                      );
+                    }
+                    return (
+                      <>
+                        <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 px-3 py-1 font-black text-amber-600 dark:text-amber-400">
+                          <Star className="size-4 fill-amber-500 text-amber-500" />
+                          <span className="text-lg leading-none">{rankInfo.average.toFixed(1)}</span>
+                          <span className="text-xs text-muted-foreground font-bold">/10</span>
+                          <span className="text-[10px] text-muted-foreground ml-1">
+                            ({rankInfo.count} review{rankInfo.count > 1 ? "s" : ""})
+                          </span>
+                        </div>
+                        <span
+                          className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-black uppercase shadow-sm ${
+                            rankInfo.rank === 1
+                              ? "bg-yellow-400 text-black"
+                              : rankInfo.rank === 2
+                              ? "bg-slate-300 text-black"
+                              : rankInfo.rank === 3
+                              ? "bg-amber-600 text-white"
+                              : "bg-primary text-primary-foreground"
+                          }`}
+                        >
+                          🏆 Rank #{rankInfo.rank} of {rankInfo.totalRanked}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Build Links Highlight */}
+              {evalCandidate.websiteUrl ? (
+                <div className="rounded-lg border-2 border-primary/40 bg-primary/10 p-3 sm:p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-primary flex items-center gap-1.5">
+                      <Rocket className="size-3.5 text-primary" /> Submitted Project / Build
+                    </span>
+                    {evalCandidate.isDropBuild && (
+                      <span className="rounded bg-primary px-1.5 py-0.2 text-[10px] font-black uppercase text-primary-foreground">
+                        Drop Station
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={evalCandidate.websiteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 text-xs font-black text-primary-foreground hover:bg-primary/90 transition-all shadow-sm group"
+                    >
+                      <Globe className="size-4" />
+                      <span className="max-w-[280px] sm:max-w-[360px] truncate">
+                        Open Build: {formatDisplayUrl(evalCandidate.websiteUrl)}
+                      </span>
+                      <ExternalLink className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (evalCandidate.websiteUrl) {
+                          navigator.clipboard.writeText(evalCandidate.websiteUrl);
+                          setCopiedUrl(evalCandidate.websiteUrl);
+                          setTimeout(() => setCopiedUrl(null), 2000);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md border border-foreground/20 bg-background px-2.5 py-2 text-xs font-bold hover:bg-muted"
+                      title="Copy Build URL"
+                    >
+                      {copiedUrl === evalCandidate.websiteUrl ? (
+                        <>
+                          <Check className="size-3.5 text-primary" /> Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-3.5" /> Copy
+                        </>
+                      )}
+                    </button>
+
+                    {evalCandidate.githubUrl && (
+                      <a
+                        href={evalCandidate.githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-foreground/20 bg-background px-3 py-2 text-xs font-bold hover:border-foreground"
+                      >
+                        <FaGithub className="size-4" /> GitHub Repo ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-foreground/20 bg-muted/20 p-2.5 text-center text-xs text-muted-foreground font-semibold">
+                  No portfolio or build URL submitted
+                </div>
+              )}
+
+              {/* 🌟 THE HERO: 1-Click Evaluation Marks 1 to 10 */}
+              <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/5 p-4 sm:p-5 space-y-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                      <Star className="size-4 fill-amber-500 text-amber-500" />
+                      Give Marks (1–10)
+                    </span>
+                    <span className="text-xs text-muted-foreground font-bold">as</span>
+                    {isEditingEvaluatorName ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="text"
+                          value={tempEvaluatorName}
+                          onChange={(e) => setTempEvaluatorName(e.target.value)}
+                          placeholder="Your Name"
+                          className="h-7 w-28 text-xs font-bold"
+                          autoFocus
+                          onKeyDown={(e) => e.key === "Enter" && saveEvaluatorName()}
+                        />
+                        <Button size="sm" variant="outline" onClick={saveEvaluatorName} className="h-7 px-2 text-xs font-bold">
+                          Save
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempEvaluatorName(evaluatorName);
+                          setIsEditingEvaluatorName(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded bg-background border border-foreground/20 px-2 py-0.5 text-xs font-black text-foreground hover:border-primary"
+                        title="Click to change your reviewing admin name"
+                      >
+                        <span>👤 {evaluatorName || "Admin 1"}</span>
+                        <Edit3 className="size-3 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+
+                  {evalSuccessNotice && (
+                    <span className="rounded bg-green-500/15 border border-green-500/30 px-2 py-0.5 text-xs font-black text-green-600 dark:text-green-400 animate-in fade-in">
+                      {evalSuccessNotice}
+                    </span>
+                  )}
+                </div>
+
+                {/* 10 Big Buttons: 1 to 10 */}
+                {(() => {
+                  const evalRecord = evaluations[evalCandidate.scholarNumber];
+                  const adminKey = evaluatorName.trim().toLowerCase();
+                  const myScore = evalRecord?.scores?.[adminKey]?.score;
+                  const isSavingThis = savingScholarNumber === evalCandidate.scholarNumber;
+
+                  return (
+                    <div>
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 sm:gap-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                          const isSelected = myScore === num;
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              disabled={isSavingThis}
+                              onClick={() => handleSetScore(evalCandidate.scholarNumber, String(num))}
+                              className={`h-12 sm:h-14 rounded-lg font-black transition-all flex flex-col items-center justify-center text-sm sm:text-base ${
+                                isSelected
+                                  ? "bg-amber-500 text-black shadow-lg ring-4 ring-amber-400/50 scale-105 border-2 border-amber-600 font-black"
+                                  : "bg-background border-2 border-foreground/15 hover:border-amber-500/80 hover:bg-amber-500/15 text-foreground hover:scale-[1.02] active:scale-95"
+                              }`}
+                              title={`Rate ${num}/10 (Shortcut key: ${num === 10 ? "0" : num})`}
+                            >
+                              <span className="text-base sm:text-lg leading-none">{num}</span>
+                              <span className="text-[9px] uppercase tracking-tighter opacity-70">
+                                {isSelected ? "★ Yours" : "/10"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Clear mark option & Breakdown */}
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
+                        {myScore !== undefined ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSetScore(evalCandidate.scholarNumber, "")}
+                            disabled={isSavingThis}
+                            className="text-xs font-bold text-destructive hover:underline"
+                          >
+                            ✕ Clear my mark ({myScore}/10)
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground font-semibold">
+                            Click any number 1–10 to assign marks instantly
+                          </span>
+                        )}
+
+                        {evalRecord?.scores && Object.keys(evalRecord.scores).length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-bold text-muted-foreground">Admin Reviews:</span>
+                            {Object.values(evalRecord.scores).map((s, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1 rounded bg-background border border-foreground/15 px-2 py-0.5 text-xs font-bold"
+                              >
+                                <span>{s.adminName}:</span>
+                                <span className="font-black text-amber-500">{s.score}/10</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Quick Status Bar */}
+              {evalCandidate.appId && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-foreground/15 bg-muted/20 p-2.5">
+                  <span className="text-xs font-bold text-foreground">Candidate Status:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { key: "pending", label: "Pending" },
+                      { key: "shortlisted", label: "Shortlisted" },
+                      { key: "selected", label: "Selected" },
+                      { key: "rejected", label: "Rejected" },
+                    ].map((s) => {
+                      const isActive = (evalCandidate.status || "pending").toLowerCase() === s.key;
+                      return (
+                        <button
+                          key={s.key}
+                          type="button"
+                          onClick={() => handleQuickUpdateStatus(evalCandidate.appId, s.key)}
+                          className={`rounded px-2.5 py-1 text-xs font-extrabold transition-all uppercase ${
+                            isActive
+                              ? s.key === "selected"
+                                ? "bg-secondary text-foreground ring-2 ring-foreground"
+                                : s.key === "shortlisted"
+                                ? "bg-primary text-primary-foreground ring-2 ring-primary"
+                                : s.key === "rejected"
+                                ? "bg-destructive text-destructive-foreground"
+                                : "bg-foreground text-background"
+                              : "bg-background border border-foreground/15 text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Expandable: Full Application & Motivation */}
+              {evalCandidate.motivation && (
+                <div className="rounded-lg border border-foreground/15 bg-background">
+                  <button
+                    type="button"
+                    onClick={() => setShowFullDetailsInEval(!showFullDetailsInEval)}
+                    className="w-full flex items-center justify-between p-3 text-xs font-extrabold uppercase text-muted-foreground hover:text-foreground"
+                  >
+                    <span>📄 {showFullDetailsInEval ? "Hide Application Essay & Details" : "View Full Application & Motivation"}</span>
+                    <span>{showFullDetailsInEval ? "▲" : "▼"}</span>
+                  </button>
+                  {showFullDetailsInEval && (
+                    <div className="p-3 pt-0 border-t border-foreground/10 text-xs space-y-2">
+                      <div>
+                        <span className="font-bold text-muted-foreground block text-[10px] uppercase">Motivation Essay</span>
+                        <p className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2.5 text-foreground leading-relaxed">
+                          {evalCandidate.motivation}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Bar: Prev / Next Navigation */}
+            <div className="flex items-center justify-between border-t-2 border-foreground bg-muted/30 p-3 sm:p-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPrevCandidate}
+                disabled={!canGoPrev}
+                className="font-bold text-xs"
+              >
+                <ChevronLeft className="size-4 mr-1" /> Previous
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEvalScholar(null)} className="text-xs font-bold">
+                  Close
+                </Button>
+                <Button
+                  variant="electric"
+                  size="sm"
+                  onClick={goToNextCandidate}
+                  disabled={!canGoNext}
+                  className="font-bold text-xs"
+                >
+                  Next Candidate <ChevronRight className="size-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* CANDIDATE DETAIL MODAL */}
