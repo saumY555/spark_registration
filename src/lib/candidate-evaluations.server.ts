@@ -177,7 +177,7 @@ export async function saveEvaluation(
       if (score === null || score === 0) {
         delete existingScores[adminKey];
       } else {
-        const safeScore = Math.max(1, Math.min(10, Math.round(score)));
+        const safeScore = Math.max(1, Math.min(100, Math.round(score)));
         existingScores[adminKey] = {
           adminName: cleanAdminName,
           score: safeScore,
@@ -224,7 +224,7 @@ export async function saveEvaluation(
     if (score === null || score === 0) {
       delete existingScores[adminKey];
     } else {
-      const safeScore = Math.max(1, Math.min(10, Math.round(score)));
+      const safeScore = Math.max(1, Math.min(100, Math.round(score)));
       existingScores[adminKey] = {
         adminName: cleanAdminName,
         score: safeScore,

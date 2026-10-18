@@ -440,7 +440,7 @@ function AdminPage() {
       if (res.evaluations) {
         setEvaluations(res.evaluations);
       }
-      setEvalSuccessNotice(score ? `✓ Saved ${score}/10` : "✓ Mark cleared");
+      setEvalSuccessNotice(score ? `✓ Saved ${score}/100` : "✓ Mark cleared");
       setTimeout(() => setEvalSuccessNotice(null), 2000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to save candidate marks.");
@@ -877,22 +877,40 @@ function AdminPage() {
         return;
       }
 
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const scholar = evalScholar.toUpperCase().trim();
+        const currentScore = evaluations[scholar]?.scores?.[evaluatorName.trim().toLowerCase()]?.score;
+        const newScore = Math.min(100, (currentScore !== undefined ? currentScore : 50) + 5);
+        handleSetScore(evalScholar, String(newScore));
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const scholar = evalScholar.toUpperCase().trim();
+        const currentScore = evaluations[scholar]?.scores?.[evaluatorName.trim().toLowerCase()]?.score;
+        const newScore = Math.max(1, (currentScore !== undefined ? currentScore : 50) - 5);
+        handleSetScore(evalScholar, String(newScore));
+        return;
+      }
+
       if (e.key >= "1" && e.key <= "9") {
         e.preventDefault();
-        handleSetScore(evalScholar, e.key);
+        handleSetScore(evalScholar, String(Number(e.key) * 10));
         return;
       }
 
       if (e.key === "0") {
         e.preventDefault();
-        handleSetScore(evalScholar, "10");
+        handleSetScore(evalScholar, "100");
         return;
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [evalScholar, currentEvalIndex, evaluationNavList, canGoPrev, canGoNext, evaluatorName]);
+  }, [evalScholar, currentEvalIndex, evaluationNavList, canGoPrev, canGoNext, evaluatorName, evaluations]);
 
   // Export Builds to CSV with Marks and Rank
   function handleExportBuildsCsv() {
@@ -903,7 +921,7 @@ function AdminPage() {
 
     const headers = [
       "Rank",
-      "Average Marks (1-10)",
+      "Average Marks (1-100)",
       "Total Admin Reviews",
       "Admin Reviews Breakdown",
       "Scholar Number",
@@ -1322,7 +1340,7 @@ function AdminPage() {
                 </p>
                 <p className="text-[11px] font-extrabold text-primary mt-0.5 truncate">
                   {topRankedBuild?.rankInfo
-                    ? `⭐ ${topRankedBuild.rankInfo.average}/10 (Rank #${topRankedBuild.rankInfo.rank})`
+                    ? `⭐ ${topRankedBuild.rankInfo.average.toFixed(1)}/100 (Rank #${topRankedBuild.rankInfo.rank})`
                     : "Awaiting marks"}
                 </p>
               </div>
@@ -1513,7 +1531,7 @@ function AdminPage() {
                     <th className="p-3 font-extrabold uppercase">Scholar No</th>
                     <th className="p-3 font-extrabold uppercase">Live Deployed Website</th>
                     <th className="p-3 font-extrabold uppercase">GitHub Repo</th>
-                    <th className="p-3 font-extrabold uppercase min-w-[160px]">Marks (1-10)</th>
+                    <th className="p-3 font-extrabold uppercase min-w-[160px]">Marks (1-100)</th>
                     <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
                     <th className="p-3 font-extrabold uppercase">Source / Status</th>
                     <th className="p-3 text-right font-extrabold uppercase">Action</th>
@@ -1548,7 +1566,7 @@ function AdminPage() {
 
                       const scoresBreakdown = evalRecord?.scores
                         ? Object.values(evalRecord.scores)
-                            .map(s => `${s.adminName}: ${s.score}/10`)
+                            .map(s => `${s.adminName}: ${s.score}/100`)
                             .join(", ")
                         : "";
 
@@ -1566,7 +1584,7 @@ function AdminPage() {
                           key={build.id || build.scholarNumber}
                           onClick={() => openEvaluationModal(build.scholarNumber)}
                           className="transition-all hover:bg-primary/5 hover:border-l-4 hover:border-l-primary cursor-pointer group"
-                          title="Click to evaluate candidate marks (1-10)"
+                          title="Click to evaluate candidate marks (1-100)"
                         >
                           <td className="p-3 text-muted-foreground font-bold whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
@@ -1582,7 +1600,7 @@ function AdminPage() {
                                       ? "bg-amber-600 text-white font-black"
                                       : "bg-muted text-foreground border border-foreground/10"
                                   }`}
-                                  title={`Rank #${rankInfo.rank} across whole candidate list (Avg: ${rankInfo.average}/10)`}
+                                  title={`Rank #${rankInfo.rank} across whole candidate list (Avg: ${rankInfo.average.toFixed(1)}/100)`}
                                 >
                                   {rankInfo.rank <= 3 ? `🏆 #${rankInfo.rank}` : `#${rankInfo.rank}`}
                                 </span>
@@ -1649,7 +1667,7 @@ function AdminPage() {
                             )}
                           </td>
 
-                          {/* Marks (1-10) Column */}
+                          {/* Marks (1-100) Column */}
                           <td className="p-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                             <div className="flex flex-col gap-1.5 min-w-[155px]">
                               {/* Average score & Rank badge */}
@@ -1658,11 +1676,11 @@ function AdminPage() {
                                   <>
                                     <span
                                       className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400"
-                                      title={`Average: ${rankInfo.average}/10 from ${rankInfo.count} admin evaluation${rankInfo.count > 1 ? "s" : ""}: ${scoresBreakdown}`}
+                                      title={`Average: ${rankInfo.average.toFixed(1)}/100 from ${rankInfo.count} admin evaluation${rankInfo.count > 1 ? "s" : ""}: ${scoresBreakdown}`}
                                     >
                                       <Star className="size-3 fill-amber-500 text-amber-500" />
                                       <span>{rankInfo.average.toFixed(1)}</span>
-                                      <span className="text-[10px] text-muted-foreground font-semibold">/10</span>
+                                      <span className="text-[10px] text-muted-foreground font-semibold">/100</span>
                                     </span>
 
                                     <span
@@ -1698,21 +1716,24 @@ function AdminPage() {
                                       ? "border-primary bg-primary/10 text-primary"
                                       : "border-foreground/20 bg-background text-foreground hover:border-foreground"
                                   }`}
-                                  title={`Give marks as ${evaluatorName || "Admin"} (1 to 10)`}
+                                  title={`Give marks as ${evaluatorName || "Admin"} (1 to 100)`}
                                 >
-                                  <option value="">{myScore ? `You: ${myScore}/10` : "Rate (1-10)"}</option>
-                                  {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(num => (
+                                  <option value="">{myScore ? `You: ${myScore}/100` : "Rate (1-100)"}</option>
+                                  {[100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30, 20, 10].map(num => (
                                     <option key={num} value={num}>
-                                      {num} / 10
+                                      {num} / 100
                                     </option>
                                   ))}
+                                  {myScore !== undefined && ![100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30, 20, 10].includes(myScore) && (
+                                    <option value={myScore}>{myScore} / 100</option>
+                                  )}
                                   {myScore !== undefined && <option value="">✕ Clear my mark</option>}
                                 </select>
 
                                 {evalRecord && evalRecord.count > 0 && (
                                   <span
                                     className="text-[10px] font-bold text-muted-foreground cursor-help underline decoration-dotted"
-                                    title={`Evaluations breakdown:\n${scoresBreakdown}\nAverage: ${evalRecord.average}/10`}
+                                    title={`Evaluations breakdown:\n${scoresBreakdown}\nAverage: ${evalRecord.average.toFixed(1)}/100`}
                                   >
                                     {evalRecord.count} {evalRecord.count === 1 ? "admin" : "admins"}
                                   </span>
@@ -2031,7 +2052,7 @@ function AdminPage() {
                           key={app.id}
                           className="transition-all hover:bg-primary/5 hover:border-l-4 hover:border-l-primary cursor-pointer group"
                           onClick={() => openEvaluationModal(app.scholar_number)}
-                          title="Click candidate to evaluate marks (1-10)"
+                          title="Click candidate to evaluate marks (1-100)"
                         >
                           <td className="p-3 text-muted-foreground font-bold">{index + 1}</td>
                           <td className="p-3 font-extrabold text-primary whitespace-nowrap">
@@ -2098,11 +2119,11 @@ function AdminPage() {
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span
                                     className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400"
-                                    title={`Average: ${rankInfo.average}/10 from ${rankInfo.count} admin evaluations`}
+                                    title={`Average: ${rankInfo.average.toFixed(1)}/100 from ${rankInfo.count} admin evaluations`}
                                   >
                                     <Star className="size-3 fill-amber-500 text-amber-500" />
                                     <span>{rankInfo.average.toFixed(1)}</span>
-                                    <span className="text-[10px] text-muted-foreground font-semibold">/10</span>
+                                    <span className="text-[10px] text-muted-foreground font-semibold">/100</span>
                                   </span>
                                   <span
                                     className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-black uppercase ${
@@ -2261,7 +2282,7 @@ function AdminPage() {
                         <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 px-3 py-1 font-black text-amber-600 dark:text-amber-400">
                           <Star className="size-4 fill-amber-500 text-amber-500" />
                           <span className="text-lg leading-none">{rankInfo.average.toFixed(1)}</span>
-                          <span className="text-xs text-muted-foreground font-bold">/10</span>
+                          <span className="text-xs text-muted-foreground font-bold">/100</span>
                           <span className="text-[10px] text-muted-foreground ml-1">
                             ({rankInfo.count} review{rankInfo.count > 1 ? "s" : ""})
                           </span>
@@ -2353,13 +2374,13 @@ function AdminPage() {
                 </div>
               )}
 
-              {/* 🌟 THE HERO: 1-Click Evaluation Marks 1 to 10 */}
-              <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/5 p-4 sm:p-5 space-y-3 shadow-sm">
+              {/* 🌟 THE HERO: Evaluation Marks 1 to 100 */}
+              <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/5 p-4 sm:p-5 space-y-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-black uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                       <Star className="size-4 fill-amber-500 text-amber-500" />
-                      Give Marks (1–10)
+                      Give Marks (1–100)
                     </span>
                     <span className="text-xs text-muted-foreground font-bold">as</span>
                     {isEditingEvaluatorName ? (
@@ -2400,7 +2421,6 @@ function AdminPage() {
                   )}
                 </div>
 
-                {/* 10 Big Buttons: 1 to 10 */}
                 {(() => {
                   const evalRecord = evaluations[evalCandidate.scholarNumber];
                   const adminKey = evaluatorName.trim().toLowerCase();
@@ -2408,34 +2428,149 @@ function AdminPage() {
                   const isSavingThis = savingScholarNumber === evalCandidate.scholarNumber;
 
                   return (
-                    <div>
-                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 sm:gap-2">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                          const isSelected = myScore === num;
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              disabled={isSavingThis}
-                              onClick={() => handleSetScore(evalCandidate.scholarNumber, String(num))}
-                              className={`h-12 sm:h-14 rounded-lg font-black transition-all flex flex-col items-center justify-center text-sm sm:text-base ${
-                                isSelected
-                                  ? "bg-amber-500 text-black shadow-lg ring-4 ring-amber-400/50 scale-105 border-2 border-amber-600 font-black"
-                                  : "bg-background border-2 border-foreground/15 hover:border-amber-500/80 hover:bg-amber-500/15 text-foreground hover:scale-[1.02] active:scale-95"
-                              }`}
-                              title={`Rate ${num}/10 (Shortcut key: ${num === 10 ? "0" : num})`}
-                            >
-                              <span className="text-base sm:text-lg leading-none">{num}</span>
-                              <span className="text-[9px] uppercase tracking-tighter opacity-70">
-                                {isSelected ? "★ Yours" : "/10"}
-                              </span>
-                            </button>
-                          );
-                        })}
+                    <div className="space-y-4">
+                      {/* Direct Numeric Input & Steppers */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 bg-background border-2 border-amber-500/30 rounded-xl p-3 shadow-inner">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isSavingThis}
+                            onClick={() => {
+                              const curr = myScore !== undefined ? myScore : 50;
+                              handleSetScore(evalCandidate.scholarNumber, String(Math.max(1, curr - 10)));
+                            }}
+                            className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
+                            title="Decrease by 10"
+                          >
+                            -10
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSavingThis}
+                            onClick={() => {
+                              const curr = myScore !== undefined ? myScore : 50;
+                              handleSetScore(evalCandidate.scholarNumber, String(Math.max(1, curr - 5)));
+                            }}
+                            className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
+                            title="Decrease by 5"
+                          >
+                            -5
+                          </button>
+                        </div>
+
+                        <div className="flex items-baseline justify-center gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={myScore !== undefined ? myScore : ""}
+                            placeholder="—"
+                            disabled={isSavingThis}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                handleSetScore(evalCandidate.scholarNumber, "");
+                                return;
+                              }
+                              const num = parseInt(val, 10);
+                              if (!isNaN(num)) {
+                                handleSetScore(evalCandidate.scholarNumber, String(Math.max(1, Math.min(100, num))));
+                              }
+                            }}
+                            className="w-20 text-center font-display text-3xl font-black bg-transparent border-b-2 border-amber-500 text-amber-500 focus:outline-none focus:border-amber-600"
+                            title="Type exact score from 1 to 100"
+                          />
+                          <span className="font-display text-lg font-black text-muted-foreground">/ 100</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isSavingThis}
+                            onClick={() => {
+                              const curr = myScore !== undefined ? myScore : 50;
+                              handleSetScore(evalCandidate.scholarNumber, String(Math.min(100, curr + 5)));
+                            }}
+                            className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
+                            title="Increase by 5"
+                          >
+                            +5
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSavingThis}
+                            onClick={() => {
+                              const curr = myScore !== undefined ? myScore : 50;
+                              handleSetScore(evalCandidate.scholarNumber, String(Math.min(100, curr + 10)));
+                            }}
+                            className="h-9 px-3 rounded-lg border border-foreground/15 bg-muted/40 hover:bg-amber-500/15 font-black text-xs hover:border-amber-500/50 transition-all active:scale-95"
+                            title="Increase by 10"
+                          >
+                            +10
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Range Slider 1-100 */}
+                      <div className="space-y-1 px-1">
+                        <div className="flex justify-between text-[10px] font-black uppercase text-muted-foreground tracking-wider">
+                          <span>1 (Basic)</span>
+                          <span>50 (Average)</span>
+                          <span>75 (Strong)</span>
+                          <span>100 (Exceptional)</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={100}
+                          step={1}
+                          disabled={isSavingThis}
+                          value={myScore !== undefined ? myScore : 50}
+                          onChange={(e) => handleSetScore(evalCandidate.scholarNumber, e.target.value)}
+                          className="w-full accent-amber-500 cursor-pointer h-2 bg-muted rounded-lg appearance-none"
+                        />
+                      </div>
+
+                      {/* 1-Click Benchmark Tiers */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">
+                            1-Click Quick Tiers:
+                          </span>
+                          <span className="text-[10px] text-muted-foreground/80 font-bold">
+                            Keys 1–9 = 10–90 • Key 0 = 100 • ↑/↓ = ±5
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                          {[30, 40, 50, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((preset) => {
+                            const isSelected = myScore === preset;
+                            return (
+                              <button
+                                key={preset}
+                                type="button"
+                                disabled={isSavingThis}
+                                onClick={() => handleSetScore(evalCandidate.scholarNumber, String(preset))}
+                                className={`h-10 rounded-lg font-black text-xs transition-all flex flex-col items-center justify-center ${
+                                  isSelected
+                                    ? "bg-amber-500 text-black shadow-md ring-2 ring-amber-400 border border-amber-600 scale-105"
+                                    : "bg-background border border-foreground/15 hover:border-amber-500 hover:bg-amber-500/10 text-foreground active:scale-95"
+                                }`}
+                                title={`Set ${preset}/100`}
+                              >
+                                <span className="leading-none">{preset}</span>
+                                {isSelected && (
+                                  <span className="text-[8px] uppercase tracking-tighter opacity-80 mt-0.5">
+                                    ★ Yours
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       {/* Clear mark option & Breakdown */}
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
                         {myScore !== undefined ? (
                           <button
                             type="button"
@@ -2443,11 +2578,11 @@ function AdminPage() {
                             disabled={isSavingThis}
                             className="text-xs font-bold text-destructive hover:underline"
                           >
-                            ✕ Clear my mark ({myScore}/10)
+                            ✕ Clear my mark ({myScore}/100)
                           </button>
                         ) : (
                           <span className="text-xs text-muted-foreground font-semibold">
-                            Click any number 1–10 to assign marks instantly
+                            Pick a tier, adjust with slider/steppers, or type directly
                           </span>
                         )}
 
@@ -2460,7 +2595,7 @@ function AdminPage() {
                                 className="inline-flex items-center gap-1 rounded bg-background border border-foreground/15 px-2 py-0.5 text-xs font-bold"
                               >
                                 <span>{s.adminName}:</span>
-                                <span className="font-black text-amber-500">{s.score}/10</span>
+                                <span className="font-black text-amber-500">{s.score}/100</span>
                               </span>
                             ))}
                           </div>
@@ -2699,7 +2834,7 @@ function AdminPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-extrabold uppercase text-primary flex items-center gap-1.5">
                     <Star className="size-4 text-amber-500 fill-amber-500" />
-                    Candidate Evaluation & Marks (1-10)
+                    Candidate Evaluation & Marks (1-100)
                   </h3>
                   {(() => {
                     const scholar = (activeCandidate.scholar_number || "").toUpperCase().trim();
@@ -2710,7 +2845,7 @@ function AdminPage() {
                     return (
                       <div className="flex items-center gap-1.5">
                         <span className="rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400">
-                          ⭐ {rankInfo.average.toFixed(1)} / 10
+                          ⭐ {rankInfo.average.toFixed(1)} / 100
                         </span>
                         <span className="rounded bg-yellow-400 px-2 py-0.5 text-xs font-black text-black">
                           🏆 Rank #{rankInfo.rank} of {rankInfo.totalRanked}
@@ -2742,12 +2877,15 @@ function AdminPage() {
                             disabled={isSavingThis}
                             className="h-8 rounded border border-input bg-background px-2 text-xs font-black cursor-pointer"
                           >
-                            <option value="">{myScore ? `Rated: ${myScore}/10` : "Select Mark (1-10)"}</option>
-                            {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(num => (
+                            <option value="">{myScore ? `Rated: ${myScore}/100` : "Select Mark (1-100)"}</option>
+                            {[100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30, 20, 10].map(num => (
                               <option key={num} value={num}>
-                                ⭐ {num} / 10
+                                ⭐ {num} / 100
                               </option>
                             ))}
+                            {myScore !== undefined && ![100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30, 20, 10].includes(myScore) && (
+                              <option value={myScore}>⭐ {myScore} / 100</option>
+                            )}
                             {myScore !== undefined && <option value="">✕ Clear my mark</option>}
                           </select>
                           {isSavingThis && <span className="text-xs text-primary font-bold animate-pulse">Saving…</span>}
@@ -2772,7 +2910,7 @@ function AdminPage() {
                                 className="inline-flex items-center gap-1 rounded bg-background border border-foreground/10 px-2 py-0.5 text-xs font-bold text-foreground"
                               >
                                 <span>{s.adminName}:</span>
-                                <span className="font-black text-primary">{s.score}/10</span>
+                                <span className="font-black text-primary">{s.score}/100</span>
                               </span>
                             ))}
                           </div>

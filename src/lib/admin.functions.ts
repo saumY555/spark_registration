@@ -263,7 +263,7 @@ export const adminSaveEvaluation = createServerFn({ method: "POST" })
           password: z.string(),
           scholarNumber: z.string().min(1),
           adminName: z.string().min(1).max(50),
-          score: z.number().int().min(1).max(10).nullable(),
+          score: z.number().int().min(1).max(100).nullable(),
         })
         .parse(input)
   )
