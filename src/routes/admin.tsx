@@ -684,9 +684,9 @@ function AdminPage() {
         map.set(scholar, {
           id: app.id,
           scholarNumber: scholar,
-          studentName: app.full_name,
-          websiteUrl: webMatch ? webMatch[1] : app.portfolio_url || "",
-          githubUrl: ghMatch ? ghMatch[1] : null,
+          studentName: app.full_name || "Unknown Candidate",
+          websiteUrl: (webMatch && webMatch[1]) ? webMatch[1] : (app.portfolio_url || ""),
+          githubUrl: (ghMatch && ghMatch[1]) ? ghMatch[1] : null,
           screenshotUrl: null,
           submittedAt: app.updated_at || app.created_at,
           posterGenerated: false,
@@ -709,7 +709,7 @@ function AdminPage() {
           map.set(scholar, {
             id: app.id,
             scholarNumber: scholar,
-            studentName: app.full_name,
+            studentName: app.full_name || "Unknown Candidate",
             websiteUrl: app.portfolio_url,
             githubUrl: null,
             screenshotUrl: null,
@@ -877,7 +877,8 @@ function AdminPage() {
       await saveCurrentDraft(evalScholar, evalDraftScore);
     }
     if (canGoNext) {
-      openEvaluationModal(evaluationNavList[currentEvalIndex + 1]);
+      const nextScholar = evaluationNavList[currentEvalIndex + 1];
+      if (nextScholar) openEvaluationModal(nextScholar);
     }
   }
 
@@ -886,7 +887,8 @@ function AdminPage() {
       await saveCurrentDraft(evalScholar, evalDraftScore);
     }
     if (canGoPrev) {
-      openEvaluationModal(evaluationNavList[currentEvalIndex - 1]);
+      const prevScholar = evaluationNavList[currentEvalIndex - 1];
+      if (prevScholar) openEvaluationModal(prevScholar);
     }
   }
 
@@ -1641,7 +1643,7 @@ function AdminPage() {
                             .join(", ")
                         : "";
 
-                      const isDropBuild =
+                      const isDropStation =
                         buildSubmissions.some(b => (b.scholarNumber || "").toUpperCase().trim() === scholarKey) ||
                         applications.some(
                           a =>
@@ -2266,11 +2268,13 @@ function AdminPage() {
       {/* ------------------------------------------------------------- */}
       {/* DEDICATED EVALUATION-FIRST MODAL */}
       {/* ------------------------------------------------------------- */}
-      {evalCandidate && evalScholar && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-150"
-          onClick={() => setEvalScholar(null)}
-        >
+      {evalCandidate && evalScholar && (() => {
+        const isSavingThis = savingScholarNumber === evalCandidate.scholarNumber;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => setEvalScholar(null)}
+          >
           <div
             className="relative flex max-h-[94vh] w-full max-w-2xl flex-col rounded-xl border-2 border-foreground bg-card shadow-[14px_14px_0_var(--primary)] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
@@ -2843,7 +2847,8 @@ function AdminPage() {
             </div>
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* ------------------------------------------------------------- */}
       {/* CANDIDATE DETAIL MODAL */}

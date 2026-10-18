@@ -144,11 +144,11 @@ export interface AdminBuildSubmissionItem {
   submittedAt: string;
   posterGenerated: boolean;
   isRegisteredCandidate: boolean;
-  registrationNo?: string;
-  email?: string;
-  phone?: string;
-  track?: string;
-  status?: string;
+  registrationNo?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+  track?: string | undefined;
+  status?: string | undefined;
 }
 
 export const adminGetBuildSubmissions = createServerFn({ method: "POST" })
