@@ -31,6 +31,10 @@ import {
   Activity,
   Layers,
   ArrowUpRight,
+  Star,
+  Trophy,
+  Award,
+  Edit3,
 } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 import { useEffect, useMemo, useState } from "react";
@@ -43,7 +47,11 @@ import {
   adminVerifyPassword,
   adminDeleteApplication,
   adminGetBuildSubmissions,
+  adminGetEvaluations,
+  adminSaveEvaluation,
   type AdminBuildSubmissionItem,
+  type CandidateEvaluationRecord,
+  type AdminScoreItem,
 } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/admin")({
@@ -133,6 +141,8 @@ function AdminPage() {
   const updateAppFn = useServerFn(adminUpdateApplication);
   const deleteAppFn = useServerFn(adminDeleteApplication);
   const getBuildsFn = useServerFn(adminGetBuildSubmissions);
+  const getEvaluationsFn = useServerFn(adminGetEvaluations);
+  const saveEvaluationFn = useServerFn(adminSaveEvaluation);
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -147,6 +157,23 @@ function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState("");
 
+  // Candidate Marks & Evaluations state
+  const [evaluations, setEvaluations] = useState<Record<string, CandidateEvaluationRecord>>({});
+  const [isLoadingEvaluations, setIsLoadingEvaluations] = useState(false);
+  const [evaluatorName, setEvaluatorName] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return localStorage.getItem("spark_evaluator_name") || "Admin 1";
+      } catch {
+        return "Admin 1";
+      }
+    }
+    return "Admin 1";
+  });
+  const [isEditingEvaluatorName, setIsEditingEvaluatorName] = useState(false);
+  const [tempEvaluatorName, setTempEvaluatorName] = useState("");
+  const [savingScholarNumber, setSavingScholarNumber] = useState<string | null>(null);
+
   // Drop Your Build Station state
   const [buildSubmissions, setBuildSubmissions] = useState<AdminBuildSubmissionItem[]>([]);
   const [isLoadingBuilds, setIsLoadingBuilds] = useState(false);
@@ -155,6 +182,8 @@ function AdminPage() {
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [copiedAllUrlsMsg, setCopiedAllUrlsMsg] = useState("");
   const [buildSourceFilter, setBuildSourceFilter] = useState<"all_submitted_links" | "drop_your_build_only">("all_submitted_links");
+  const [buildSortBy, setBuildSortBy] = useState<"newest" | "rank">("newest");
+  const [buildMarksFilter, setBuildMarksFilter] = useState<"all" | "rated" | "unrated">("all");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTrack, setSelectedTrack] = useState("All Tracks");
@@ -199,6 +228,7 @@ function AdminPage() {
       }
       loadApplications(pass);
       loadBuildSubmissions(pass, true);
+      loadEvaluations(pass);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : "Invalid password. Access denied.");
       setIsAuthenticated(false);
@@ -212,6 +242,7 @@ function AdminPage() {
     setPassword("");
     setApplications([]);
     setBuildSubmissions([]);
+    setEvaluations({});
     try {
       sessionStorage.removeItem("spark_admin_auth");
     } catch {
@@ -229,6 +260,7 @@ function AdminPage() {
       const res = await getAppsFn({ data: { password: pass } });
       setApplications(res.applications as ApplicationRecord[]);
       loadBuildSubmissions(pass, true);
+      loadEvaluations(pass);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Failed to fetch candidates.");
     } finally {
@@ -251,11 +283,122 @@ function AdminPage() {
     }
   }
 
-  // Auto-refresh builds every 10 seconds if toggled on
+  async function loadEvaluations(passOverride?: string) {
+    const pass = passOverride || password;
+    if (!pass) return;
+    setIsLoadingEvaluations(true);
+
+    try {
+      const res = await getEvaluationsFn({ data: { password: pass } });
+      if (res.evaluations) {
+        setEvaluations(res.evaluations);
+      }
+    } catch (err) {
+      console.warn("[Failed to load candidate evaluations]", err);
+    } finally {
+      setIsLoadingEvaluations(false);
+    }
+  }
+
+  function saveEvaluatorName() {
+    const clean = tempEvaluatorName.trim() || "Admin 1";
+    setEvaluatorName(clean);
+    setIsEditingEvaluatorName(false);
+    try {
+      localStorage.setItem("spark_evaluator_name", clean);
+    } catch {
+      // Ignore
+    }
+  }
+
+  async function handleSetScore(scholarNumber: string, scoreVal: string) {
+    let reviewer = evaluatorName.trim();
+    if (!reviewer || reviewer === "Admin") {
+      const prompted = window.prompt(
+        "Enter your name as the reviewing admin (e.g. Saumy, Harsh, Ayush):",
+        reviewer || "Admin 1"
+      );
+      if (!prompted || !prompted.trim()) return;
+      reviewer = prompted.trim();
+      setEvaluatorName(reviewer);
+      try {
+        localStorage.setItem("spark_evaluator_name", reviewer);
+      } catch {
+        // Ignore
+      }
+    }
+
+    const score = scoreVal === "" ? null : Number(scoreVal);
+    const scholarKey = scholarNumber.toUpperCase().trim();
+    setSavingScholarNumber(scholarKey);
+
+    // Instant optimistic update
+    setEvaluations((prev) => {
+      const existing = prev[scholarKey] || {
+        scholarNumber: scholarKey,
+        scores: {},
+        average: 0,
+        count: 0,
+        lastUpdated: new Date().toISOString(),
+      };
+      const updatedScores = { ...existing.scores };
+      const adminKey = reviewer.trim().toLowerCase();
+
+      if (score === null || score === 0) {
+        delete updatedScores[adminKey];
+      } else {
+        updatedScores[adminKey] = {
+          adminName: reviewer,
+          score,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      const list = Object.values(updatedScores).filter((s) => s.score >= 1 && s.score <= 10);
+      const avg =
+        list.length > 0
+          ? Number((list.reduce((acc, c) => acc + c.score, 0) / list.length).toFixed(1))
+          : 0;
+
+      return {
+        ...prev,
+        [scholarKey]: {
+          ...existing,
+          scores: updatedScores,
+          average: avg,
+          count: list.length,
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+    });
+
+    try {
+      const res = await saveEvaluationFn({
+        data: {
+          password,
+          scholarNumber: scholarKey,
+          adminName: reviewer,
+          score,
+        },
+      });
+
+      if (res.evaluations) {
+        setEvaluations(res.evaluations);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save candidate marks.");
+      loadEvaluations(password);
+    } finally {
+      setSavingScholarNumber(null);
+    }
+  }
+
+  // Auto-refresh builds & evaluations every 10 seconds if toggled on
   useEffect(() => {
     if (!isAuthenticated || !autoRefreshBuilds || !password) return;
     const interval = setInterval(() => {
       loadBuildSubmissions(password, true);
+      loadEvaluations(password);
     }, 10000);
     return () => clearInterval(interval);
   }, [isAuthenticated, autoRefreshBuilds, password]);
@@ -382,6 +525,74 @@ function AdminPage() {
     });
   }, [applications, searchQuery, selectedTrack, selectedStatus, linkFilter, dropBuildScholarSet]);
 
+  // Global Candidate Ranking Map based on average marks given by all admins
+  const candidateRankMap = useMemo(() => {
+    const scholarSet = new Set<string>();
+    for (const b of buildSubmissions) {
+      if (b.scholarNumber) scholarSet.add(b.scholarNumber.toUpperCase().trim());
+    }
+    for (const a of applications) {
+      if (a.scholar_number) scholarSet.add(a.scholar_number.toUpperCase().trim());
+    }
+    for (const scholar of Object.keys(evaluations)) {
+      scholarSet.add(scholar.toUpperCase().trim());
+    }
+
+    const scoredList: Array<{
+      scholarNumber: string;
+      average: number;
+      count: number;
+      lastUpdated: string;
+    }> = [];
+
+    for (const scholar of scholarSet) {
+      const evalRecord = evaluations[scholar];
+      if (evalRecord && evalRecord.count > 0 && evalRecord.average > 0) {
+        scoredList.push({
+          scholarNumber: scholar,
+          average: evalRecord.average,
+          count: evalRecord.count,
+          lastUpdated: evalRecord.lastUpdated || "",
+        });
+      }
+    }
+
+    // Sort descending:
+    // 1. highest average score
+    // 2. higher number of reviews (tie-breaker)
+    // 3. deterministic scholarNumber
+    scoredList.sort((a, b) => {
+      if (b.average !== a.average) {
+        return b.average - a.average;
+      }
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+      return a.scholarNumber.localeCompare(b.scholarNumber);
+    });
+
+    const map = new Map<
+      string,
+      {
+        rank: number;
+        average: number;
+        count: number;
+        totalRanked: number;
+      }
+    >();
+
+    scoredList.forEach((item, idx) => {
+      map.set(item.scholarNumber, {
+        rank: idx + 1,
+        average: item.average,
+        count: item.count,
+        totalRanked: scoredList.length,
+      });
+    });
+
+    return map;
+  }, [evaluations, applications, buildSubmissions]);
+
   // Submissions for the Drop Your Build Live Station View
   const displayBuilds = useMemo(() => {
     const map = new Map<string, AdminBuildSubmissionItem>();
@@ -459,10 +670,27 @@ function AdminPage() {
       );
     }
 
+    if (buildMarksFilter === "rated") {
+      list = list.filter(b => candidateRankMap.has(b.scholarNumber.toUpperCase().trim()));
+    } else if (buildMarksFilter === "unrated") {
+      list = list.filter(b => !candidateRankMap.has(b.scholarNumber.toUpperCase().trim()));
+    }
+
+    if (buildSortBy === "rank") {
+      return list.sort((a, b) => {
+        const rankA = candidateRankMap.get(a.scholarNumber.toUpperCase().trim())?.rank ?? Infinity;
+        const rankB = candidateRankMap.get(b.scholarNumber.toUpperCase().trim())?.rank ?? Infinity;
+        if (rankA !== rankB) {
+          return rankA - rankB;
+        }
+        return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+      });
+    }
+
     return list.sort(
       (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
     );
-  }, [buildSubmissions, applications, buildSourceFilter, buildSearchQuery]);
+  }, [buildSubmissions, applications, buildSourceFilter, buildSearchQuery, buildMarksFilter, buildSortBy, candidateRankMap]);
 
   // Copy all build URLs to clipboard
   function handleCopyAllBuildUrls() {
@@ -476,7 +704,7 @@ function AdminPage() {
     setTimeout(() => setCopiedAllUrlsMsg(""), 3000);
   }
 
-  // Export Builds to CSV
+  // Export Builds to CSV with Marks and Rank
   function handleExportBuildsCsv() {
     if (!displayBuilds.length) {
       alert("No build records to export.");
@@ -484,6 +712,10 @@ function AdminPage() {
     }
 
     const headers = [
+      "Rank",
+      "Average Marks (1-10)",
+      "Total Admin Reviews",
+      "Admin Reviews Breakdown",
       "Scholar Number",
       "Student Name",
       "Website URL",
@@ -495,17 +727,32 @@ function AdminPage() {
       "Phone",
     ];
 
-    const rows = displayBuilds.map(b => [
-      `"${b.scholarNumber}"`,
-      `"${b.studentName.replace(/"/g, '""')}"`,
-      `"${b.websiteUrl}"`,
-      `"${b.githubUrl || ""}"`,
-      `"${formatTimestampIST(b.submittedAt)}"`,
-      `"${b.isRegisteredCandidate ? "Registered" : "Walk-in"}"`,
-      `"${b.track || ""}"`,
-      `"${b.email || ""}"`,
-      `"${b.phone || ""}"`,
-    ]);
+    const rows = displayBuilds.map(b => {
+      const scholar = b.scholarNumber.toUpperCase().trim();
+      const rankInfo = candidateRankMap.get(scholar);
+      const evalRecord = evaluations[scholar];
+      const breakdown = evalRecord?.scores
+        ? Object.values(evalRecord.scores)
+            .map(s => `${s.adminName}:${s.score}`)
+            .join("; ")
+        : "";
+
+      return [
+        `"${rankInfo ? rankInfo.rank : "Unranked"}"`,
+        `"${rankInfo ? rankInfo.average : ""}"`,
+        `"${rankInfo ? rankInfo.count : 0}"`,
+        `"${breakdown.replace(/"/g, '""')}"`,
+        `"${b.scholarNumber}"`,
+        `"${b.studentName.replace(/"/g, '""')}"`,
+        `"${b.websiteUrl}"`,
+        `"${b.githubUrl || ""}"`,
+        `"${formatTimestampIST(b.submittedAt)}"`,
+        `"${b.isRegisteredCandidate ? "Registered" : "Walk-in"}"`,
+        `"${b.track || ""}"`,
+        `"${b.email || ""}"`,
+        `"${b.phone || ""}"`,
+      ];
+    });
 
     const csvString = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
@@ -517,6 +764,26 @@ function AdminPage() {
     link.click();
     document.body.removeChild(link);
   }
+
+  // Evaluated builds count for quick status
+  const evaluatedBuildsCount = useMemo(() => {
+    return displayBuilds.filter(b => {
+      const r = candidateRankMap.get(b.scholarNumber.toUpperCase().trim());
+      return Boolean(r && r.count > 0);
+    }).length;
+  }, [displayBuilds, candidateRankMap]);
+
+  // Top ranked candidate in current view
+  const topRankedBuild = useMemo(() => {
+    const rated = displayBuilds
+      .map(b => ({
+        build: b,
+        rankInfo: candidateRankMap.get(b.scholarNumber.toUpperCase().trim()),
+      }))
+      .filter(x => Boolean(x.rankInfo && x.rankInfo.count > 0));
+    rated.sort((a, b) => (a.rankInfo?.rank ?? Infinity) - (b.rankInfo?.rank ?? Infinity));
+    return rated[0] || null;
+  }, [displayBuilds, candidateRankMap]);
 
   // Track & Submission Metrics
   const metrics = useMemo(() => {
@@ -835,7 +1102,7 @@ function AdminPage() {
             </section>
 
             {/* Metric Summary Cards */}
-            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
               <div className="border border-foreground/20 bg-card p-4 shadow-sm">
                 <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
                   <Rocket className="size-3 text-primary" /> Total Builds Dropped
@@ -846,22 +1113,38 @@ function AdminPage() {
 
               <div className="border border-foreground/20 bg-card p-4 shadow-sm">
                 <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <Star className="size-3 text-amber-500 fill-amber-500" /> Evaluated Candidates
+                </span>
+                <p className="font-display text-3xl font-extrabold text-amber-500 mt-1">
+                  {evaluatedBuildsCount} <span className="text-base text-muted-foreground font-bold">/ {displayBuilds.length}</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">
+                  {candidateRankMap.size} ranked in whole list
+                </p>
+              </div>
+
+              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <Trophy className="size-3 text-yellow-500" /> Rank #1 Candidate
+                </span>
+                <p className="font-display text-xl font-black text-foreground mt-1 truncate">
+                  {topRankedBuild ? topRankedBuild.build.studentName : "—"}
+                </p>
+                <p className="text-[11px] font-extrabold text-primary mt-0.5 truncate">
+                  {topRankedBuild?.rankInfo
+                    ? `⭐ ${topRankedBuild.rankInfo.average}/10 (Rank #${topRankedBuild.rankInfo.rank})`
+                    : "Awaiting marks"}
+                </p>
+              </div>
+
+              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
                   <FaGithub className="size-3 text-foreground" /> With GitHub Repos
                 </span>
                 <p className="font-display text-3xl font-bold mt-1">
                   {displayBuilds.filter(b => b.githubUrl).length}
                 </p>
                 <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">Source code linked</p>
-              </div>
-
-              <div className="border border-foreground/20 bg-card p-4 shadow-sm">
-                <span className="text-[10px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
-                  <UserCheck className="size-3 text-foreground" /> Registered Members
-                </span>
-                <p className="font-display text-3xl font-bold mt-1">
-                  {displayBuilds.filter(b => b.isRegisteredCandidate).length}
-                </p>
-                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">Matched with applicant profile</p>
               </div>
 
               <div className="border border-foreground/20 bg-card p-4 shadow-sm">
@@ -878,41 +1161,155 @@ function AdminPage() {
             </section>
 
             {/* Search & Source Filter Bar */}
-            <section className="flex flex-col gap-3 rounded-md border border-foreground/20 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search builds by student name, scholar no, website URL, or GitHub repo…"
-                  value={buildSearchQuery}
-                  onChange={e => setBuildSearchQuery(e.target.value)}
-                  className="pl-9 text-sm"
-                />
+            <section className="flex flex-col gap-3 rounded-md border border-foreground/20 bg-card p-4 shadow-sm">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search builds by student name, scholar no, website URL, or GitHub repo…"
+                    value={buildSearchQuery}
+                    onChange={e => setBuildSearchQuery(e.target.value)}
+                    className="pl-9 text-sm"
+                  />
+                </div>
+
+                {/* Evaluator Identity Pill */}
+                <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary shrink-0">
+                  <UserCheck className="size-4 text-primary" />
+                  <span>Evaluating as:</span>
+                  {isEditingEvaluatorName ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="text"
+                        value={tempEvaluatorName}
+                        onChange={e => setTempEvaluatorName(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") saveEvaluatorName();
+                          if (e.key === "Escape") setIsEditingEvaluatorName(false);
+                        }}
+                        placeholder="Admin name"
+                        className="h-6 w-28 px-1.5 text-xs font-bold"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={saveEvaluatorName}
+                        className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-black text-primary-foreground hover:bg-primary/90"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempEvaluatorName(evaluatorName);
+                        setIsEditingEvaluatorName(true);
+                      }}
+                      className="inline-flex items-center gap-1 font-black underline decoration-dashed hover:text-foreground"
+                      title="Click to edit your evaluator name"
+                    >
+                      <span className="text-foreground">{evaluatorName || "Admin 1"}</span>
+                      <Edit3 className="size-3 text-muted-foreground" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="inline-flex rounded-md border border-foreground/20 bg-muted/30 p-1">
-                <button
-                  type="button"
-                  onClick={() => setBuildSourceFilter("all_submitted_links")}
-                  className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
-                    buildSourceFilter === "all_submitted_links"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  All Submitted Builds ({applications.filter(a => a.portfolio_url).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBuildSourceFilter("drop_your_build_only")}
-                  className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
-                    buildSourceFilter === "drop_your_build_only"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  🚀 Drop Station Only ({buildSubmissions.length})
-                </button>
+              {/* Second row: Order by Rank / Newest + Marks Filter + Source Filter */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-foreground/10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-extrabold uppercase text-muted-foreground">Order:</span>
+                  <div className="inline-flex rounded-md border border-foreground/20 bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setBuildSortBy("newest")}
+                      className={`rounded px-3 py-1 text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+                        buildSortBy === "newest"
+                          ? "bg-foreground text-background shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Clock className="size-3" />
+                      <span>Newest Drops</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBuildSortBy("rank")}
+                      className={`rounded px-3 py-1 text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+                        buildSortBy === "rank"
+                          ? "bg-amber-500 text-black shadow-sm font-black"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Trophy className="size-3 text-yellow-600 dark:text-yellow-400" />
+                      <span>Rank Leaderboard ({candidateRankMap.size})</span>
+                    </button>
+                  </div>
+
+                  <span className="text-[11px] font-extrabold uppercase text-muted-foreground ml-1">Marks Filter:</span>
+                  <div className="inline-flex rounded-md border border-foreground/20 bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setBuildMarksFilter("all")}
+                      className={`rounded px-2.5 py-1 text-[11px] font-black uppercase transition-all ${
+                        buildMarksFilter === "all"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBuildMarksFilter("rated")}
+                      className={`rounded px-2.5 py-1 text-[11px] font-black uppercase transition-all ${
+                        buildMarksFilter === "rated"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      ⭐ Evaluated ({displayBuilds.filter(b => candidateRankMap.has(b.scholarNumber.toUpperCase().trim())).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBuildMarksFilter("unrated")}
+                      className={`rounded px-2.5 py-1 text-[11px] font-black uppercase transition-all ${
+                        buildMarksFilter === "unrated"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      ⏳ Unrated ({displayBuilds.filter(b => !candidateRankMap.has(b.scholarNumber.toUpperCase().trim())).length})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="inline-flex rounded-md border border-foreground/20 bg-muted/30 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setBuildSourceFilter("all_submitted_links")}
+                    className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                      buildSourceFilter === "all_submitted_links"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    All Submitted Builds ({applications.filter(a => a.portfolio_url).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBuildSourceFilter("drop_your_build_only")}
+                    className={`rounded px-3 py-1.5 text-xs font-black uppercase transition-all ${
+                      buildSourceFilter === "drop_your_build_only"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    🚀 Drop Station Only ({buildSubmissions.length})
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -926,6 +1323,7 @@ function AdminPage() {
                     <th className="p-3 font-extrabold uppercase">Scholar No</th>
                     <th className="p-3 font-extrabold uppercase">Live Deployed Website</th>
                     <th className="p-3 font-extrabold uppercase">GitHub Repo</th>
+                    <th className="p-3 font-extrabold uppercase min-w-[160px]">Marks (1-10)</th>
                     <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
                     <th className="p-3 font-extrabold uppercase">Source / Status</th>
                     <th className="p-3 text-right font-extrabold uppercase">Action</th>
@@ -934,7 +1332,7 @@ function AdminPage() {
                 <tbody className="divide-y divide-foreground/10 font-medium">
                   {displayBuilds.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-12 text-center">
+                      <td colSpan={9} className="p-12 text-center">
                         <div className="mx-auto max-w-md space-y-3">
                           <div className="mx-auto grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
                             <Rocket className="size-6 animate-bounce" />
@@ -950,6 +1348,20 @@ function AdminPage() {
                     </tr>
                   ) : (
                     displayBuilds.map((build, index) => {
+                      const scholarKey = build.scholarNumber.toUpperCase().trim();
+                      const rankInfo = candidateRankMap.get(scholarKey);
+                      const evalRecord = evaluations[scholarKey];
+                      const adminKey = evaluatorName.trim().toLowerCase();
+                      const myScoreItem = evalRecord?.scores?.[adminKey];
+                      const myScore = myScoreItem?.score;
+                      const isSavingThis = savingScholarNumber === scholarKey;
+
+                      const scoresBreakdown = evalRecord?.scores
+                        ? Object.values(evalRecord.scores)
+                            .map(s => `${s.adminName}: ${s.score}/10`)
+                            .join(", ")
+                        : "";
+
                       const isDropStation =
                         buildSubmissions.some(b => b.scholarNumber.toUpperCase().trim() === build.scholarNumber.toUpperCase().trim()) ||
                         applications.some(
@@ -961,7 +1373,27 @@ function AdminPage() {
 
                       return (
                         <tr key={build.id || build.scholarNumber} className="transition-colors hover:bg-muted/40">
-                          <td className="p-3 text-muted-foreground font-bold">{index + 1}</td>
+                          <td className="p-3 text-muted-foreground font-bold whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <span>{index + 1}</span>
+                              {rankInfo && rankInfo.count > 0 && (
+                                <span
+                                  className={`inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-black uppercase ${
+                                    rankInfo.rank === 1
+                                      ? "bg-yellow-400 text-black font-black shadow-sm"
+                                      : rankInfo.rank === 2
+                                      ? "bg-slate-300 text-black font-black"
+                                      : rankInfo.rank === 3
+                                      ? "bg-amber-600 text-white font-black"
+                                      : "bg-muted text-foreground border border-foreground/10"
+                                  }`}
+                                  title={`Rank #${rankInfo.rank} across whole candidate list (Avg: ${rankInfo.average}/10)`}
+                                >
+                                  {rankInfo.rank <= 3 ? `🏆 #${rankInfo.rank}` : `#${rankInfo.rank}`}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-3">
                             <div className="font-extrabold text-foreground">{build.studentName}</div>
                             {build.email && (
@@ -1020,6 +1452,84 @@ function AdminPage() {
                             ) : (
                               <span className="text-muted-foreground/40 text-xs font-semibold">—</span>
                             )}
+                          </td>
+
+                          {/* Marks (1-10) Column */}
+                          <td className="p-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-col gap-1.5 min-w-[155px]">
+                              {/* Average score & Rank badge */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {rankInfo && rankInfo.count > 0 ? (
+                                  <>
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400"
+                                      title={`Average: ${rankInfo.average}/10 from ${rankInfo.count} admin evaluation${rankInfo.count > 1 ? "s" : ""}: ${scoresBreakdown}`}
+                                    >
+                                      <Star className="size-3 fill-amber-500 text-amber-500" />
+                                      <span>{rankInfo.average.toFixed(1)}</span>
+                                      <span className="text-[10px] text-muted-foreground font-semibold">/10</span>
+                                    </span>
+
+                                    <span
+                                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-black uppercase ${
+                                        rankInfo.rank === 1
+                                          ? "bg-yellow-400 text-black font-black shadow-sm"
+                                          : rankInfo.rank === 2
+                                          ? "bg-slate-300 text-black font-black"
+                                          : rankInfo.rank === 3
+                                          ? "bg-amber-600 text-white font-black"
+                                          : "bg-primary/20 text-primary border border-primary/40"
+                                      }`}
+                                      title={`Rank #${rankInfo.rank} across whole candidate list`}
+                                    >
+                                      {rankInfo.rank <= 3 ? `🏆 #${rankInfo.rank}` : `Rank #${rankInfo.rank}`}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] font-bold text-muted-foreground/60 italic">
+                                    Not evaluated
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Admin input dropdown */}
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={myScore !== undefined ? String(myScore) : ""}
+                                  onChange={e => handleSetScore(build.scholarNumber, e.target.value)}
+                                  disabled={isSavingThis}
+                                  className={`h-7 rounded border px-2 text-xs font-black transition-all cursor-pointer ${
+                                    myScore
+                                      ? "border-primary bg-primary/10 text-primary"
+                                      : "border-foreground/20 bg-background text-foreground hover:border-foreground"
+                                  }`}
+                                  title={`Give marks as ${evaluatorName || "Admin"} (1 to 10)`}
+                                >
+                                  <option value="">{myScore ? `You: ${myScore}/10` : "Rate (1-10)"}</option>
+                                  {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(num => (
+                                    <option key={num} value={num}>
+                                      {num} / 10
+                                    </option>
+                                  ))}
+                                  {myScore !== undefined && <option value="">✕ Clear my mark</option>}
+                                </select>
+
+                                {evalRecord && evalRecord.count > 0 && (
+                                  <span
+                                    className="text-[10px] font-bold text-muted-foreground cursor-help underline decoration-dotted"
+                                    title={`Evaluations breakdown:\n${scoresBreakdown}\nAverage: ${evalRecord.average}/10`}
+                                  >
+                                    {evalRecord.count} {evalRecord.count === 1 ? "admin" : "admins"}
+                                  </span>
+                                )}
+
+                                {isSavingThis && (
+                                  <span className="text-[10px] text-primary font-bold animate-pulse">
+                                    Saving…
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </td>
                           <td className="p-3 whitespace-nowrap">
                             <div className="font-bold text-foreground">{formatTimeAgo(build.submittedAt)}</div>
@@ -1279,6 +1789,7 @@ function AdminPage() {
                     <th className="p-3 font-extrabold uppercase">Contact</th>
                     <th className="p-3 font-extrabold uppercase">Tracks</th>
                     <th className="p-3 font-extrabold uppercase">Link / Build</th>
+                    <th className="p-3 font-extrabold uppercase">Marks & Rank</th>
                     <th className="p-3 font-extrabold uppercase">Status</th>
                     <th className="p-3 font-extrabold uppercase">Submitted (IST)</th>
                     <th className="p-3 text-right font-extrabold uppercase">Action</th>
@@ -1287,7 +1798,7 @@ function AdminPage() {
                 <tbody className="divide-y divide-foreground/10 font-medium">
                   {filteredApps.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-muted-foreground">
+                      <td colSpan={11} className="p-8 text-center text-muted-foreground">
                         {isLoading
                           ? "Loading candidates…"
                           : linkFilter === "drop_build"
@@ -1370,6 +1881,42 @@ function AdminPage() {
                             ) : (
                               <span className="text-muted-foreground/40 text-xs font-semibold">—</span>
                             )}
+                          </td>
+                          {/* Marks & Rank column */}
+                          <td className="p-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            {(() => {
+                              const scholar = (app.scholar_number || "").toUpperCase().trim();
+                              const rankInfo = candidateRankMap.get(scholar);
+                              if (!rankInfo || rankInfo.count === 0) {
+                                return <span className="text-muted-foreground/40 text-xs italic">Unrated</span>;
+                              }
+                              return (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400"
+                                    title={`Average: ${rankInfo.average}/10 from ${rankInfo.count} admin evaluations`}
+                                  >
+                                    <Star className="size-3 fill-amber-500 text-amber-500" />
+                                    <span>{rankInfo.average.toFixed(1)}</span>
+                                    <span className="text-[10px] text-muted-foreground font-semibold">/10</span>
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-black uppercase ${
+                                      rankInfo.rank === 1
+                                        ? "bg-yellow-400 text-black font-black shadow-sm"
+                                        : rankInfo.rank === 2
+                                        ? "bg-slate-300 text-black font-black"
+                                        : rankInfo.rank === 3
+                                        ? "bg-amber-600 text-white font-black"
+                                        : "bg-primary/20 text-primary border border-primary/40"
+                                    }`}
+                                    title={`Global Rank #${rankInfo.rank}`}
+                                  >
+                                    {rankInfo.rank <= 3 ? `🏆 #${rankInfo.rank}` : `#${rankInfo.rank}`}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="p-3 whitespace-nowrap">
                             <span className={`inline-block rounded px-2 py-0.5 text-[11px] uppercase ${statusColor}`}>
@@ -1542,9 +2089,94 @@ function AdminPage() {
               </div>
 
               {/* Admin Evaluation Section */}
-              <div className="border-t border-foreground/20 pt-4">
-                <h3 className="text-xs font-extrabold uppercase text-primary mb-3">Organizer Evaluation</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="border-t border-foreground/20 pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-extrabold uppercase text-primary flex items-center gap-1.5">
+                    <Star className="size-4 text-amber-500 fill-amber-500" />
+                    Candidate Evaluation & Marks (1-10)
+                  </h3>
+                  {(() => {
+                    const scholar = (activeCandidate.scholar_number || "").toUpperCase().trim();
+                    const rankInfo = candidateRankMap.get(scholar);
+                    if (!rankInfo || rankInfo.count === 0) {
+                      return <span className="text-xs text-muted-foreground font-semibold">Not rated yet</span>;
+                    }
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <span className="rounded bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-xs font-black text-amber-600 dark:text-amber-400">
+                          ⭐ {rankInfo.average.toFixed(1)} / 10
+                        </span>
+                        <span className="rounded bg-yellow-400 px-2 py-0.5 text-xs font-black text-black">
+                          🏆 Rank #{rankInfo.rank} of {rankInfo.totalRanked}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Score selector in modal */}
+                {(() => {
+                  const scholar = (activeCandidate.scholar_number || "").toUpperCase().trim();
+                  const evalRecord = evaluations[scholar];
+                  const adminKey = evaluatorName.trim().toLowerCase();
+                  const myScore = evalRecord?.scores?.[adminKey]?.score;
+                  const isSavingThis = savingScholarNumber === scholar;
+                  const scoresList = evalRecord?.scores ? Object.values(evalRecord.scores) : [];
+
+                  return (
+                    <div className="rounded-lg border border-foreground/20 bg-muted/20 p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-foreground">
+                            Your Mark ({evaluatorName || "Admin"}):
+                          </label>
+                          <select
+                            value={myScore !== undefined ? String(myScore) : ""}
+                            onChange={e => handleSetScore(scholar, e.target.value)}
+                            disabled={isSavingThis}
+                            className="h-8 rounded border border-input bg-background px-2 text-xs font-black cursor-pointer"
+                          >
+                            <option value="">{myScore ? `Rated: ${myScore}/10` : "Select Mark (1-10)"}</option>
+                            {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(num => (
+                              <option key={num} value={num}>
+                                ⭐ {num} / 10
+                              </option>
+                            ))}
+                            {myScore !== undefined && <option value="">✕ Clear my mark</option>}
+                          </select>
+                          {isSavingThis && <span className="text-xs text-primary font-bold animate-pulse">Saving…</span>}
+                        </div>
+
+                        {scoresList.length > 0 && (
+                          <span className="text-xs text-muted-foreground font-semibold">
+                            {scoresList.length} admin review{scoresList.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+
+                      {scoresList.length > 0 && (
+                        <div className="pt-2 border-t border-foreground/10">
+                          <span className="text-[11px] font-extrabold uppercase text-muted-foreground block mb-1">
+                            Evaluations Breakdown:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {scoresList.map((s, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1 rounded bg-background border border-foreground/10 px-2 py-0.5 text-xs font-bold text-foreground"
+                              >
+                                <span>{s.adminName}:</span>
+                                <span className="font-black text-primary">{s.score}/10</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-2">
                   <div>
                     <label className="mb-1 block text-xs font-bold">Candidate Status</label>
                     <select

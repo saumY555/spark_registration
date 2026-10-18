@@ -217,3 +217,46 @@ export const adminGetBuildSubmissions = createServerFn({ method: "POST" })
     return { submissions: list };
   });
 
+export type { AdminScoreItem, CandidateEvaluationRecord } from "./candidate-evaluations.server";
+
+export const adminGetEvaluations = createServerFn({ method: "POST" })
+  .validator((input: { password: string }) => z.object({ password: z.string() }).parse(input))
+  .handler(async ({ data }) => {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
+      throw new Error("Unauthorized. Invalid password.");
+    }
+
+    const { getAllEvaluations } = await import("@/lib/candidate-evaluations.server");
+    const evaluations = await getAllEvaluations();
+    return { evaluations };
+  });
+
+export const adminSaveEvaluation = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      password: string;
+      scholarNumber: string;
+      adminName: string;
+      score: number | null;
+    }) =>
+      z
+        .object({
+          password: z.string(),
+          scholarNumber: z.string().min(1),
+          adminName: z.string().min(1).max(50),
+          score: z.number().int().min(1).max(10).nullable(),
+        })
+        .parse(input)
+  )
+  .handler(async ({ data }) => {
+    const adminPassword = getAdminPassword();
+    if (data.password !== adminPassword) {
+      throw new Error("Unauthorized. Invalid password.");
+    }
+
+    const { saveEvaluation } = await import("@/lib/candidate-evaluations.server");
+    const result = await saveEvaluation(data.scholarNumber, data.adminName, data.score);
+    return { success: true, evaluation: result.evaluation, evaluations: result.all };
+  });
+
