@@ -99,4 +99,22 @@ describe("Candidate Evaluations & Admin Marks (1 to 100)", () => {
     expect(candidates[2].scholar).toBe("26U04");
     expect(candidates[3].scholar).toBe("26U01");
   });
+
+  it("handles null, undefined, or malformed inputs to calculateEvaluationSummary without throwing", () => {
+    expect(calculateEvaluationSummary(null)).toEqual({ average: 0, count: 0 });
+    expect(calculateEvaluationSummary(undefined)).toEqual({ average: 0, count: 0 });
+    expect(calculateEvaluationSummary({} as any)).toEqual({ average: 0, count: 0 });
+
+    const corruptedScores = {
+      corrupt1: null as any,
+      corrupt2: undefined as any,
+      corrupt3: { score: NaN } as any,
+      corrupt4: { score: "eighty" } as any,
+      valid: { adminName: "Admin", score: 85, updatedAt: "" },
+    };
+
+    const summary = calculateEvaluationSummary(corruptedScores);
+    expect(summary.count).toBe(1);
+    expect(summary.average).toBe(85);
+  });
 });
